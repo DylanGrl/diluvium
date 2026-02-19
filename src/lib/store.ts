@@ -14,12 +14,36 @@ function setItem<T>(key: string, value: T): void {
   localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
 }
 
-export const store = {
-  getTheme: () => getItem<"dark" | "light">("theme", "dark"),
-  setTheme: (theme: "dark" | "light") => setItem("theme", theme),
+export type ThemeMode = "dark" | "light" | "system" | "catppuccin" | "catppuccin-latte" | "nord" | "nord-light";
 
-  getApiEndpoint: () => getItem<string>("api_endpoint", ""),
-  setApiEndpoint: (url: string) => setItem("api_endpoint", url),
+const THEME_CLASSES = ["dark", "catppuccin", "catppuccin-latte", "nord", "nord-light"] as const;
+
+// Dark themes need the "dark" class for Tailwind dark variant to work
+const DARK_THEMES: ThemeMode[] = ["dark", "catppuccin", "nord"];
+
+export function applyTheme(mode: ThemeMode) {
+  const el = document.documentElement;
+  // Remove all theme classes
+  el.classList.remove(...THEME_CLASSES);
+
+  if (mode === "system") {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    el.classList.toggle("dark", prefersDark);
+  } else {
+    // Add the theme class
+    if (mode !== "light") {
+      el.classList.add(mode);
+    }
+    // Also add "dark" class for dark themes so Tailwind dark: variant works
+    if (DARK_THEMES.includes(mode) && mode !== "dark") {
+      el.classList.add("dark");
+    }
+  }
+}
+
+export const store = {
+  getTheme: () => getItem<ThemeMode>("theme", "dark"),
+  setTheme: (theme: ThemeMode) => setItem("theme", theme),
 
   getSortColumn: () => getItem<string>("sort_column", "name"),
   setSortColumn: (col: string) => setItem("sort_column", col),
@@ -35,11 +59,19 @@ export const store = {
       "name",
       "size",
       "progress",
-      "download_speed",
-      "upload_speed",
+      "state",
+      "download_payload_rate",
+      "upload_payload_rate",
       "eta",
       "ratio",
-      "state",
+      "num_seeds",
+      "num_peers",
     ]),
   setSelectedColumns: (cols: string[]) => setItem("columns", cols),
+
+  getDetailPanelHeight: () => getItem<number>("detail_height", 280),
+  setDetailPanelHeight: (h: number) => setItem("detail_height", h),
+
+  getDefaultDownloadLocation: () => getItem<string>("download_location", ""),
+  setDefaultDownloadLocation: (path: string) => setItem("download_location", path),
 };

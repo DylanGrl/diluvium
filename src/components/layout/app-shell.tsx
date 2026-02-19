@@ -1,8 +1,20 @@
-import type { ReactNode } from "react";
+import type { ReactNode, DragEventHandler } from "react";
 
-export function AppShell({ children }: { children: ReactNode }) {
+interface AppShellProps {
+  children: ReactNode;
+  onDragOver?: DragEventHandler;
+  onDragLeave?: DragEventHandler;
+  onDrop?: DragEventHandler;
+}
+
+export function AppShell({ children, onDragOver, onDragLeave, onDrop }: AppShellProps) {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div
+      className="flex h-screen flex-col overflow-hidden bg-background text-foreground"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       {children}
     </div>
   );

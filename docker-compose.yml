@@ -1,0 +1,8 @@
+services:
+  diluvium:
+    build: .
+    ports:
+      - "3000:80"
+    environment:
+      - DELUGE_URL=http://192.168.1.x:8112
+    restart: unless-stopped

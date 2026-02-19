@@ -34,12 +34,22 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Semantic accent colors */
+  --color-dl: var(--dl);
+  --color-ul: var(--ul);
+  --color-state-error: var(--state-error);
+  --color-state-warning: var(--state-warning);
+  --color-state-check: var(--state-check);
+  --color-brand: var(--brand);
+  --color-link: var(--link);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ─── Default Light (Zinc) ─── */
 :root {
   --radius: 0.5rem;
   --background: oklch(1 0 0);
@@ -57,7 +67,7 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -69,8 +79,17 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  --dl: #3b82f6;
+  --ul: #22c55e;
+  --state-error: #ef4444;
+  --state-warning: #eab308;
+  --state-check: #a855f7;
+  --brand: #3b82f6;
+  --link: #3b82f6;
 }
 
+/* ─── Default Dark (Zinc) ─── */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -87,7 +106,7 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
@@ -99,6 +118,170 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+
+  --dl: #60a5fa;
+  --ul: #4ade80;
+  --state-error: #f87171;
+  --state-warning: #facc15;
+  --state-check: #c084fc;
+  --brand: #60a5fa;
+  --link: #60a5fa;
+}
+
+/* ─── Catppuccin Mocha ─── */
+.catppuccin {
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --card: #1e1e2e;
+  --card-foreground: #cdd6f4;
+  --popover: #1e1e2e;
+  --popover-foreground: #cdd6f4;
+  --primary: #cba6f7;
+  --primary-foreground: #1e1e2e;
+  --secondary: #313244;
+  --secondary-foreground: #cdd6f4;
+  --muted: #313244;
+  --muted-foreground: #a6adc8;
+  --accent: #313244;
+  --accent-foreground: #cdd6f4;
+  --destructive: #f38ba8;
+  --destructive-foreground: #1e1e2e;
+  --border: #45475a;
+  --input: #45475a;
+  --ring: #cba6f7;
+  --sidebar-background: #181825;
+  --sidebar-foreground: #cdd6f4;
+  --sidebar-primary: #cba6f7;
+  --sidebar-primary-foreground: #1e1e2e;
+  --sidebar-accent: #313244;
+  --sidebar-accent-foreground: #cdd6f4;
+  --sidebar-border: #45475a;
+  --sidebar-ring: #cba6f7;
+
+  --dl: #74c7ec;
+  --ul: #a6e3a1;
+  --state-error: #f38ba8;
+  --state-warning: #f9e2af;
+  --state-check: #cba6f7;
+  --brand: #89b4fa;
+  --link: #89dceb;
+}
+
+/* ─── Catppuccin Latte (Light) ─── */
+.catppuccin-latte {
+  --background: #eff1f5;
+  --foreground: #4c4f69;
+  --card: #eff1f5;
+  --card-foreground: #4c4f69;
+  --popover: #eff1f5;
+  --popover-foreground: #4c4f69;
+  --primary: #8839ef;
+  --primary-foreground: #eff1f5;
+  --secondary: #dce0e8;
+  --secondary-foreground: #4c4f69;
+  --muted: #dce0e8;
+  --muted-foreground: #7c7f93;
+  --accent: #dce0e8;
+  --accent-foreground: #4c4f69;
+  --destructive: #d20f39;
+  --destructive-foreground: #eff1f5;
+  --border: #ccd0da;
+  --input: #ccd0da;
+  --ring: #8839ef;
+  --sidebar-background: #e6e9ef;
+  --sidebar-foreground: #4c4f69;
+  --sidebar-primary: #8839ef;
+  --sidebar-primary-foreground: #eff1f5;
+  --sidebar-accent: #dce0e8;
+  --sidebar-accent-foreground: #4c4f69;
+  --sidebar-border: #ccd0da;
+  --sidebar-ring: #8839ef;
+
+  --dl: #209fb5;
+  --ul: #40a02b;
+  --state-error: #d20f39;
+  --state-warning: #df8e1d;
+  --state-check: #8839ef;
+  --brand: #1e66f5;
+  --link: #04a5e5;
+}
+
+/* ─── Nord Dark ─── */
+.nord {
+  --background: #2e3440;
+  --foreground: #eceff4;
+  --card: #2e3440;
+  --card-foreground: #eceff4;
+  --popover: #2e3440;
+  --popover-foreground: #eceff4;
+  --primary: #88c0d0;
+  --primary-foreground: #2e3440;
+  --secondary: #3b4252;
+  --secondary-foreground: #eceff4;
+  --muted: #3b4252;
+  --muted-foreground: #d8dee9;
+  --accent: #3b4252;
+  --accent-foreground: #eceff4;
+  --destructive: #bf616a;
+  --destructive-foreground: #eceff4;
+  --border: #434c5e;
+  --input: #434c5e;
+  --ring: #88c0d0;
+  --sidebar-background: #292e39;
+  --sidebar-foreground: #eceff4;
+  --sidebar-primary: #88c0d0;
+  --sidebar-primary-foreground: #2e3440;
+  --sidebar-accent: #3b4252;
+  --sidebar-accent-foreground: #eceff4;
+  --sidebar-border: #434c5e;
+  --sidebar-ring: #88c0d0;
+
+  --dl: #88c0d0;
+  --ul: #a3be8c;
+  --state-error: #bf616a;
+  --state-warning: #ebcb8b;
+  --state-check: #b48ead;
+  --brand: #81a1c1;
+  --link: #88c0d0;
+}
+
+/* ─── Nord Light (Snow Storm) ─── */
+.nord-light {
+  --background: #eceff4;
+  --foreground: #2e3440;
+  --card: #eceff4;
+  --card-foreground: #2e3440;
+  --popover: #eceff4;
+  --popover-foreground: #2e3440;
+  --primary: #5e81ac;
+  --primary-foreground: #eceff4;
+  --secondary: #e5e9f0;
+  --secondary-foreground: #2e3440;
+  --muted: #e5e9f0;
+  --muted-foreground: #4c566a;
+  --accent: #e5e9f0;
+  --accent-foreground: #2e3440;
+  --destructive: #bf616a;
+  --destructive-foreground: #eceff4;
+  --border: #d8dee9;
+  --input: #d8dee9;
+  --ring: #5e81ac;
+  --sidebar-background: #e5e9f0;
+  --sidebar-foreground: #2e3440;
+  --sidebar-primary: #5e81ac;
+  --sidebar-primary-foreground: #eceff4;
+  --sidebar-accent: #d8dee9;
+  --sidebar-accent-foreground: #2e3440;
+  --sidebar-border: #d8dee9;
+  --sidebar-ring: #5e81ac;
+
+  --dl: #5e81ac;
+  --ul: #a3be8c;
+  --state-error: #bf616a;
+  --state-warning: #d08770;
+  --state-check: #b48ead;
+  --brand: #5e81ac;
+  --link: #5e81ac;
 }
 
 @layer base {

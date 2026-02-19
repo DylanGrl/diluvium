@@ -100,6 +100,14 @@ export type FilterState =
   | "Active"
   | "Queued";
 
+export interface TorrentNFOData {
+  num_pieces: number;
+  piece_length: number;
+  creator: string;
+  creation_date: number;
+  trackers: { url: string; tier: number }[];
+}
+
 export interface DelugeRPCResponse<T = unknown> {
   id: number;
   result: T;

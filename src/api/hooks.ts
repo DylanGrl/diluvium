@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { delugeClient } from "./client";
-import type { Peer, TorrentStatus, UpdateUIResult } from "./types";
+import type { Peer, TorrentNFOData, TorrentStatus, UpdateUIResult } from "./types";
 
 export const TORRENT_FIELDS: (keyof TorrentStatus)[] = [
   "hash",
@@ -127,6 +127,20 @@ export function useUpdateUI(
     enabled,
     refetchInterval: interval,
     refetchIntervalInBackground: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// External IP
+// ---------------------------------------------------------------------------
+
+export function useExternalIP(enabled = true) {
+  return useQuery<string>({
+    queryKey: ["externalIP"],
+    queryFn: () => delugeClient.getExternalIP(),
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -325,6 +339,53 @@ export function useAddTorrent() {
   });
 
   return { addMagnetMutation, addUrlMutation, addFileMutation, uploadFileMutation };
+}
+
+// ---------------------------------------------------------------------------
+// NFO / Torrent creation
+// ---------------------------------------------------------------------------
+
+export function useTorrentNFOData(hash: string | null) {
+  return useQuery<TorrentNFOData>({
+    queryKey: ["torrent", "nfo", hash],
+    queryFn: () =>
+      delugeClient.getTorrentNFOData(hash!) as Promise<TorrentNFOData>,
+    enabled: !!hash,
+  });
+}
+
+export function useCreateTorrent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: {
+      path: string;
+      tracker: string;
+      pieceLength: number;
+      comment: string;
+      target: string;
+      webseeds: string[];
+      priv: boolean;
+      createdBy: string;
+      trackers: string[][];
+      addToSession: boolean;
+    }) =>
+      delugeClient.createTorrent(
+        params.path,
+        params.tracker,
+        params.pieceLength,
+        params.comment,
+        params.target,
+        params.webseeds,
+        params.priv,
+        params.createdBy,
+        params.trackers,
+        params.addToSession,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["updateUI"] });
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

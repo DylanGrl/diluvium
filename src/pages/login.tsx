@@ -18,12 +18,14 @@ export function LoginPage() {
 
     try {
       const success = await loginMutation.mutateAsync(password);
+      setPassword(""); // Clear password from state immediately
       if (success) {
         navigate("/", { replace: true });
       } else {
         setError("Invalid password");
       }
     } catch {
+      setPassword("");
       setError("Failed to connect to Deluge");
     }
   }
@@ -33,7 +35,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm space-y-6 px-4">
         <div className="flex flex-col items-center space-y-2">
           <div className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-            <Droplets className="h-8 w-8 text-blue-500" />
+            <Droplets className="h-8 w-8 text-brand" />
             Diluvium
           </div>
           <p className="text-sm text-muted-foreground">
@@ -55,7 +57,7 @@ export function LoginPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-state-error">{error}</p>
           )}
 
           <Button

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronsUp,
   ChevronsDown,
+  FileText,
 } from "lucide-react";
 
 interface TorrentActionsProps {
@@ -48,6 +49,14 @@ export function TorrentActions({ selectedCount, onAction }: TorrentActionsProps)
       <Button variant="ghost" size="sm" onClick={() => onAction("queue_bottom")} title="Queue Bottom">
         <ChevronsDown className="h-3.5 w-3.5" />
       </Button>
+      {selectedCount === 1 && (
+        <>
+          <div className="mx-1 h-4 w-px bg-border" />
+          <Button variant="ghost" size="sm" onClick={() => onAction("generate_nfo")} title="Generate NFO / Create Torrent">
+            <FileText className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
     </div>
   );
 }

@@ -1,34 +1,62 @@
 import type { DelugeRPCResponse } from "./types";
 
+declare global {
+  interface Window {
+    __DILUVIUM_CONFIG__?: { DELUGE_URL?: string };
+  }
+}
+
+function getBaseUrl(): string {
+  // Runtime config injected by Docker entrypoint
+  const runtimeUrl = window.__DILUVIUM_CONFIG__?.DELUGE_URL;
+  if (runtimeUrl) return runtimeUrl.replace(/\/+$/, "");
+  // In dev mode, Vite proxy handles /json and /upload, so empty base is correct
+  return "";
+}
+
 class DelugeClient {
   private id = 0;
-  private baseUrl = "";
+  private baseUrl = getBaseUrl();
+  private timeoutMs = 30_000;
 
   setBaseUrl(url: string) {
     this.baseUrl = url;
   }
 
   async call<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
-    const response = await fetch(`${this.baseUrl}/json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        id: this.id++,
-        method,
-        params,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+    try {
+      const response = await fetch(`${this.baseUrl}/json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          id: this.id++,
+          method,
+          params,
+        }),
+      });
 
-    const data: DelugeRPCResponse<T> = await response.json();
-    if (data.error) {
-      throw new Error(data.error.message);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: DelugeRPCResponse<T> = await response.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+      return data.result;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error(`Request timed out after ${this.timeoutMs / 1000}s`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-    return data.result;
   }
 
   // Auth
@@ -179,6 +207,45 @@ class DelugeClient {
 
   async moveTorrent(hash: string, dest: string): Promise<void> {
     await this.call("core.move_storage", [[hash], dest]);
+  }
+
+  // System info
+  async getExternalIP(): Promise<string> {
+    return this.call<string>("core.get_external_ip");
+  }
+
+  // NFO / Torrent creation
+  async getTorrentNFOData(hash: string): Promise<unknown> {
+    return this.call("core.get_torrent_status", [
+      hash,
+      ["num_pieces", "piece_length", "creator", "creation_date", "trackers"],
+    ]);
+  }
+
+  async createTorrent(
+    path: string,
+    tracker: string,
+    pieceLength: number,
+    comment: string,
+    target: string,
+    webseeds: string[],
+    priv: boolean,
+    createdBy: string,
+    trackers: string[][],
+    addToSession: boolean,
+  ): Promise<string | null> {
+    return this.call<string | null>("core.create_torrent", [
+      path,
+      tracker,
+      pieceLength,
+      comment,
+      target,
+      webseeds,
+      priv,
+      createdBy,
+      trackers,
+      addToSession,
+    ]);
   }
 
   // Config

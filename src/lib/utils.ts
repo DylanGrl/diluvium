@@ -47,15 +47,15 @@ export function formatDate(timestamp: number): string {
 export function torrentStateColor(state: string): string {
   switch (state) {
     case "Downloading":
-      return "text-blue-500";
+      return "text-dl";
     case "Seeding":
-      return "text-green-500";
+      return "text-ul";
     case "Paused":
-      return "text-yellow-500";
+      return "text-state-warning";
     case "Checking":
-      return "text-purple-500";
+      return "text-state-check";
     case "Error":
-      return "text-red-500";
+      return "text-state-error";
     case "Queued":
       return "text-muted-foreground";
     default:
@@ -64,8 +64,8 @@ export function torrentStateColor(state: string): string {
 }
 
 export function progressColor(progress: number, state: string): string {
-  if (state === "Error") return "bg-red-500";
-  if (state === "Paused") return "bg-yellow-500";
-  if (progress >= 100) return "bg-green-500";
-  return "bg-blue-500";
+  if (state === "Error") return "bg-state-error";
+  if (state === "Paused") return "bg-state-warning";
+  if (progress >= 100) return "bg-ul";
+  return "bg-dl";
 }

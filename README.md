@@ -1,73 +1,113 @@
-# React + TypeScript + Vite
+# Diluvium
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern web UI for the [Deluge](https://deluge-torrent.org/) BitTorrent client. Built with React, TypeScript, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Real-time torrent monitoring with 3s polling
+- Add torrents via file upload, magnet links, or URLs
+- Drag & drop `.torrent` files
+- Per-torrent file priority editing
+- Speed graphs (download/upload history)
+- NFO generator with multiple templates
+- Torrent creator via Deluge RPC
+- Column visibility customization
+- Resizable detail panel
+- Shift+click / Ctrl+A multi-selection
+- Country flags for peers
+- Multiple themes: Light, Dark, System, Catppuccin (Mocha/Latte), Nord (Dark/Light)
+- Keyboard shortcuts (A=add, N=nfo, Space=pause/resume, Del=remove, Ctrl+F=search)
 
-## React Compiler
+## Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- [Node.js](https://nodejs.org/) 20+
+- [pnpm](https://pnpm.io/) 9+
+- A running [Deluge](https://deluge-torrent.org/) daemon with web UI enabled
 
-## Expanding the ESLint configuration
+## Quick Start
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Clone and install
+git clone <repo-url> diluvium
+cd diluvium
+pnpm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Configure the Deluge URL (defaults to http://localhost:8112)
+cp .env.example .env
+# Edit .env to point DELUGE_URL to your Deluge web interface
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start development server
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open http://localhost:5173 and log in with your Deluge web password.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Build for Production
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm build
 ```
+
+The output is in `dist/`. Use the provided Docker image (recommended) or place the `dist/` folder behind a reverse proxy that forwards `/json` and `/upload` to your Deluge instance — Deluge does not send CORS headers, so a direct browser-to-Deluge setup will not work.
+
+## Docker
+
+The Docker image uses nginx to both serve the UI and proxy API calls to Deluge. This avoids CORS entirely — the browser always talks to the same origin (the nginx container), which forwards `/json` and `/upload` requests to your Deluge instance.
+
+### Quick start
+
+```bash
+docker run -p 3000:80 -e DELUGE_URL=http://192.168.1.x:8112 ghcr.io/you/diluvium
+```
+
+Or build and run locally:
+
+```bash
+docker build -t diluvium .
+docker run -p 3000:80 -e DELUGE_URL=http://192.168.1.x:8112 diluvium
+```
+
+### Docker Compose
+
+Edit `docker-compose.yml` and set `DELUGE_URL` to your Deluge address, then:
+
+```bash
+docker compose up -d
+```
+
+Diluvium will be available at http://localhost:3000.
+
+> **No rebuild needed** — `DELUGE_URL` is read at container startup. Just update the env var and restart.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `DELUGE_URL` | Deluge web UI address, e.g. `http://192.168.1.100:8112`. Used by Vite proxy in dev and by nginx in Docker. |
+
+## Project Structure
+
+```
+src/
+  api/           # Deluge JSON-RPC client, React Query hooks, types
+  components/
+    layout/      # App shell, header, sidebar
+    settings/    # Settings dialog
+    torrents/    # Torrent table, detail panel, add/remove dialogs, NFO
+    ui/          # Reusable UI primitives (button, dialog, tabs, etc.)
+  lib/           # Utilities, theme store, NFO templates
+  pages/         # Login + Dashboard pages
+```
+
+## Security
+
+- All API calls use `credentials: "include"` (cookie-based auth from Deluge)
+- 30s request timeout prevents hung connections
+- Production builds have source maps disabled
+- No secrets stored in the frontend — authentication is handled by Deluge's session cookies
+- Passwords are cleared from React state immediately after login attempt
+- File download names are sanitized
+
+## License
+
+MIT
