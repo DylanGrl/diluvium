@@ -59,7 +59,7 @@ The Docker image uses nginx to both serve the UI and proxy API calls to Deluge. 
 ### Quick start
 
 ```bash
-docker run -p 3000:80 -e DELUGE_URL=http://192.168.1.x:8112 ghcr.io/you/diluvium
+docker run -p 3000:80 -e DELUGE_URL=http://192.168.1.x:8112 grldylan/diluvium
 ```
 
 Or build and run locally:
