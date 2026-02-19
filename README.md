@@ -2,6 +2,8 @@
 
 A modern web UI for the [Deluge](https://deluge-torrent.org/) BitTorrent client. Built with React, TypeScript, and Tailwind CSS.
 
+![Diluvium UI](image.png)
+
 ## Features
 
 - Real-time torrent monitoring with 3s polling
