@@ -31,7 +31,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-dvh items-center justify-center bg-background">
       <div className="w-full max-w-sm space-y-6 px-4">
         <div className="flex flex-col items-center space-y-2">
           <div className="flex items-center gap-2 text-3xl font-bold tracking-tight">

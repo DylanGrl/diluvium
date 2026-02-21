@@ -3,6 +3,13 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Health check for orchestrators
+    location /health {
+        access_log off;
+        return 200 "OK";
+        add_header Content-Type text/plain;
+    }
+
     # Proxy Deluge JSON-RPC — keeps requests same-origin so there is no CORS issue
     location /json {
         proxy_pass ${DELUGE_URL};

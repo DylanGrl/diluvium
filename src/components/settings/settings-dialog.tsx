@@ -58,7 +58,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <div>
                 <Label>Theme</Label>
                 <p className="text-xs text-muted-foreground mb-2">Choose your preferred appearance</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {THEMES.map((t) => (
                     <button
                       key={t.id}

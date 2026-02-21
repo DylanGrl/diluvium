@@ -6,11 +6,10 @@ declare global {
   }
 }
 
-function getBaseUrl(): string {
-  // Runtime config injected by Docker entrypoint
-  const runtimeUrl = window.__DILUVIUM_CONFIG__?.DELUGE_URL;
+/** Exported for unit tests. In dev, Vite proxy handles /json and /upload; in Docker, same origin. */
+export function getBaseUrl(): string {
+  const runtimeUrl = typeof window !== "undefined" ? window.__DILUVIUM_CONFIG__?.DELUGE_URL : undefined;
   if (runtimeUrl) return runtimeUrl.replace(/\/+$/, "");
-  // In dev mode, Vite proxy handles /json and /upload, so empty base is correct
   return "";
 }
 
@@ -157,18 +156,36 @@ class DelugeClient {
     ]);
   }
 
+  private uploadTimeoutMs = 60_000;
+
   async uploadTorrentFile(file: File): Promise<string[]> {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await fetch(`${this.baseUrl}/upload`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-    if (!response.ok)
-      throw new Error(`Upload failed: ${response.statusText}`);
-    const data = await response.json();
-    return data.files as string[];
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.uploadTimeoutMs);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${this.baseUrl}/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+        signal: controller.signal,
+      });
+      if (!response.ok)
+        throw new Error(`Upload failed: ${response.statusText}`);
+      const data = (await response.json()) as { files?: unknown };
+      if (!Array.isArray(data?.files))
+        throw new Error("Invalid upload response: missing or invalid files array");
+      const files = data.files as unknown[];
+      if (!files.every((f): f is string => typeof f === "string"))
+        throw new Error("Invalid upload response: files must be strings");
+      return files;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError")
+        throw new Error(`Upload timed out after ${this.uploadTimeoutMs / 1000}s`);
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async setTorrentOptions(

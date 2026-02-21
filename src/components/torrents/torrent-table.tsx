@@ -1,11 +1,13 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
 import { cn, formatBytes, formatSpeed, formatETA, formatRatio, torrentStateColor, progressColor } from "@/lib/utils";
 import { store } from "@/lib/store";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ArrowUp, ArrowDown, Plus, Search, FilterX, Columns3 } from "lucide-react";
+
+const ROW_HEIGHT_PX = 44;
 
 interface TorrentTableProps {
   torrents: (TorrentStatus & { hash: string })[];
@@ -21,14 +23,14 @@ interface TorrentTableProps {
 type SortDir = "asc" | "desc";
 
 const ALL_COLUMNS = [
-  { key: "name", label: "Name", className: "flex-[3] min-w-[140px]", alwaysVisible: true },
-  { key: "size", label: "Size", className: "w-24 text-right", hideBelow: "md" as const },
-  { key: "progress", label: "Progress", className: "w-28", alwaysVisible: true },
-  { key: "state", label: "Status", className: "w-24", alwaysVisible: true },
-  { key: "download_payload_rate", label: "Down", className: "w-24 text-right", alwaysVisible: true },
-  { key: "upload_payload_rate", label: "Up", className: "w-24 text-right", alwaysVisible: true },
-  { key: "eta", label: "ETA", className: "w-20 text-right", hideBelow: "lg" as const },
-  { key: "ratio", label: "Ratio", className: "w-16 text-right", hideBelow: "lg" as const },
+  { key: "name", label: "Name", className: "flex-[3] min-w-[100px] sm:min-w-[140px]", alwaysVisible: true },
+  { key: "size", label: "Size", className: "w-24 min-w-[5.5rem] text-right", hideBelow: "md" as const },
+  { key: "progress", label: "Progress", className: "w-20 sm:w-28", alwaysVisible: true },
+  { key: "state", label: "Status", className: "w-20 sm:w-24 min-w-[5.5rem]", hideBelow: "sm" as const },
+  { key: "download_payload_rate", label: "Down", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
+  { key: "upload_payload_rate", label: "Up", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
+  { key: "eta", label: "ETA", className: "w-20 min-w-[4.5rem] text-right", hideBelow: "lg" as const },
+  { key: "ratio", label: "Ratio", className: "w-16 min-w-[4.5rem] text-right", hideBelow: "lg" as const },
   { key: "num_seeds", label: "Seeds", className: "w-20 text-right", hideBelow: "xl" as const },
   { key: "num_peers", label: "Peers", className: "w-20 text-right", hideBelow: "xl" as const },
 ] as const;
@@ -113,9 +115,19 @@ export function TorrentTable({
   }, []);
 
   const allSelected = torrents.length > 0 && selectedHashes.size === torrents.length;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT_PX,
+    overscan: 8,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex flex-1 flex-col overflow-hidden min-h-0">
       {/* Header */}
       <div className="flex shrink-0 items-center border-b bg-muted/50 px-3 text-xs font-medium text-muted-foreground">
         <div className="w-7 shrink-0 flex items-center justify-center">
@@ -131,14 +143,17 @@ export function TorrentTable({
             key={col.key}
             onClick={() => handleSort(col.key)}
             className={cn(
-              "flex items-center gap-1 px-2 py-2 hover:text-foreground transition-colors",
+              "flex items-center px-2 py-2 hover:text-foreground transition-colors shrink-0",
+              col.className.includes("text-right") && "justify-end",
               getResponsiveClass(col)
             )}
           >
-            {col.label}
-            {sortColumn === col.key && (
-              sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-            )}
+            <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+              <span>{col.label}</span>
+              {sortColumn === col.key && (
+                sortDir === "asc" ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />
+              )}
+            </span>
           </button>
         ))}
         <div className="relative ml-auto shrink-0">
@@ -170,28 +185,28 @@ export function TorrentTable({
       </div>
 
       {/* Rows */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 min-h-0 overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/25 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/25" ref={scrollRef}>
         {isLoading ? (
           <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="flex items-center border-b px-3 py-3">
                 <div className="w-7 shrink-0" />
-                <div className="flex-[3] min-w-[140px] px-2">
+                <div className="flex-[3] min-w-[100px] sm:min-w-[140px] px-2">
                   <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
                 </div>
                 <div className="hidden md:block w-24 px-2">
                   <div className="h-4 w-16 animate-pulse rounded bg-muted ml-auto" />
                 </div>
-                <div className="w-28 px-2">
+                <div className="w-20 sm:w-28 px-2">
                   <div className="h-1.5 w-full animate-pulse rounded-full bg-muted" />
                 </div>
-                <div className="w-24 px-2">
+                <div className="hidden sm:block w-20 sm:w-24 px-2">
                   <div className="h-4 w-16 animate-pulse rounded bg-muted" />
                 </div>
-                <div className="w-24 px-2">
+                <div className="w-16 sm:w-24 px-2">
                   <div className="h-4 w-14 animate-pulse rounded bg-muted ml-auto" />
                 </div>
-                <div className="w-24 px-2">
+                <div className="w-16 sm:w-24 px-2">
                   <div className="h-4 w-14 animate-pulse rounded bg-muted ml-auto" />
                 </div>
               </div>
@@ -223,26 +238,42 @@ export function TorrentTable({
             )}
           </div>
         ) : (
-          sorted.map((torrent) => (
-            <ContextMenu
-              key={torrent.hash}
-              content={
-                <TorrentContextMenuContent
-                  torrent={torrent}
-                  onAction={onAction}
-                />
-              }
-            >
-              <TorrentRow
-                torrent={torrent}
-                selected={selectedHashes.has(torrent.hash)}
-                columns={columns}
-                onSelect={onSelect}
-              />
-            </ContextMenu>
-          ))
+          <div
+            className="relative w-full"
+            style={{ height: `${virtualizer.getTotalSize()}px` }}
+          >
+            {virtualItems.map((virtualRow) => {
+              const torrent = sorted[virtualRow.index];
+              return (
+                <div
+                  key={torrent.hash}
+                  className="absolute left-0 w-full"
+                  style={{
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <ContextMenu
+                    content={
+                      <TorrentContextMenuContent
+                        torrent={torrent}
+                        onAction={onAction}
+                      />
+                    }
+                  >
+                    <TorrentRow
+                      torrent={torrent}
+                      selected={selectedHashes.has(torrent.hash)}
+                      columns={columns}
+                      onSelect={onSelect}
+                    />
+                  </ContextMenu>
+                </div>
+              );
+            })}
+          </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 }
@@ -295,7 +326,7 @@ function TorrentRow({
     <div
       onClick={(e) => onSelect(torrent.hash, e.ctrlKey || e.metaKey, e.shiftKey)}
       className={cn(
-        "flex items-center border-b px-3 text-sm cursor-pointer transition-colors",
+        "flex items-center border-b px-3 text-sm cursor-pointer transition-colors min-h-[44px]",
         selected
           ? "bg-accent/80 text-accent-foreground"
           : "hover:bg-muted/50"

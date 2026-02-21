@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectOption } from "@/components/ui/select";
-import { X, GripHorizontal, Loader2 } from "lucide-react";
+import { X, GripHorizontal, Loader2, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+
+const CROSS_SEED_DOCS_URL = "https://github.com/cross-seed/cross-seed";
 
 const LazySpeedGraphTab = lazy(() =>
   import("./speed-graph-tab").then((m) => ({ default: m.SpeedGraphTab }))
@@ -48,7 +50,8 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
     function onMouseMove(ev: MouseEvent) {
       if (!draggingRef.current) return;
       const delta = startYRef.current - ev.clientY;
-      const next = Math.max(150, Math.min(600, startHeightRef.current + delta));
+      const maxHeight = Math.min(600, window.innerHeight - 100);
+      const next = Math.max(150, Math.min(maxHeight, startHeightRef.current + delta));
       setPanelHeight(next);
     }
 
@@ -69,14 +72,47 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
     window.addEventListener("mouseup", onMouseUp);
   }, [panelHeight]);
 
-  const contentHeight = panelHeight - 80; // header + tabs
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    draggingRef.current = true;
+    startYRef.current = touch.clientY;
+    startHeightRef.current = panelHeight;
+
+    function onTouchMove(ev: TouchEvent) {
+      if (!draggingRef.current) return;
+      ev.preventDefault();
+      const t = ev.touches[0];
+      const delta = startYRef.current - t.clientY;
+      const maxHeight = Math.min(600, window.innerHeight - 100);
+      const next = Math.max(150, Math.min(maxHeight, startHeightRef.current + delta));
+      setPanelHeight(next);
+    }
+
+    function onTouchEnd() {
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        setPanelHeight((h) => {
+          store.setDetailPanelHeight(h);
+          return h;
+        });
+      }
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    }
+
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+  }, [panelHeight]);
+
+  const contentHeight = panelHeight - 88; // drag handle + title bar + tabs
 
   return (
     <div className="shrink-0 border-t bg-card flex flex-col" style={{ height: panelHeight }}>
       {/* Drag handle */}
       <div
         onMouseDown={handleMouseDown}
-        className="flex h-3 shrink-0 cursor-row-resize items-center justify-center hover:bg-muted/50"
+        onTouchStart={handleTouchStart}
+        className="flex h-5 shrink-0 cursor-row-resize touch-none items-center justify-center hover:bg-muted/50"
       >
         <GripHorizontal className="h-3 w-3 text-muted-foreground" />
       </div>
@@ -87,17 +123,19 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
         </Button>
       </div>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
-        <TabsList className="mx-4 mt-1">
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="speed">Speed</TabsTrigger>
-          <TabsTrigger value="files">Files</TabsTrigger>
-          <TabsTrigger value="peers">Peers</TabsTrigger>
-          <TabsTrigger value="trackers">Trackers</TabsTrigger>
-          <TabsTrigger value="options">Options</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto px-4 mt-1 shrink-0">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="speed">Speed</TabsTrigger>
+            <TabsTrigger value="files">Files</TabsTrigger>
+            <TabsTrigger value="peers">Peers</TabsTrigger>
+            <TabsTrigger value="trackers">Trackers</TabsTrigger>
+            <TabsTrigger value="options">Options</TabsTrigger>
+          </TabsList>
+        </div>
         <div className="flex-1 overflow-hidden" style={{ height: contentHeight }}>
           <TabsContent value="general">
-            <GeneralTab torrent={torrent} contentHeight={contentHeight} />
+            <GeneralTab hash={hash} torrent={torrent} contentHeight={contentHeight} />
           </TabsContent>
           <TabsContent value="speed">
             <Suspense fallback={<div className="flex items-center justify-center" style={{ height: contentHeight }}><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
@@ -122,7 +160,15 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
   );
 }
 
-function GeneralTab({ torrent, contentHeight }: { torrent: TorrentStatus; contentHeight: number }) {
+function GeneralTab({
+  hash,
+  torrent,
+  contentHeight,
+}: {
+  hash: string;
+  torrent: TorrentStatus;
+  contentHeight: number;
+}) {
   const items = [
     ["Progress", `${torrent.progress.toFixed(1)}% (${formatBytes(torrent.total_done)} / ${formatBytes(torrent.total_size)})`],
     ["Download Speed", formatSpeed(torrent.download_payload_rate)],
@@ -139,6 +185,11 @@ function GeneralTab({ torrent, contentHeight }: { torrent: TorrentStatus; conten
     ["Message", torrent.message || "—"],
   ];
 
+  async function copyInfohash() {
+    await navigator.clipboard.writeText(hash);
+    toast.success("Infohash copied");
+  }
+
   return (
     <ScrollArea style={{ height: contentHeight }} className="px-4 py-2">
       <div className="mb-2">
@@ -149,13 +200,37 @@ function GeneralTab({ torrent, contentHeight }: { torrent: TorrentStatus; conten
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs">
         {items.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-2">
             <span className="text-muted-foreground shrink-0">{label}</span>
             <span className="truncate text-right">{value}</span>
           </div>
         ))}
+      </div>
+      <div className="mt-4 pt-4 border-t space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Cross-seed</p>
+        <p className="text-xs text-muted-foreground">
+          Use this infohash with cross-seed to find matching torrents on other trackers.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="text-xs bg-muted px-2 py-1 rounded font-mono truncate max-w-[12rem]" title={hash}>
+            {hash}
+          </code>
+          <Button variant="outline" size="sm" className="h-7 gap-1" onClick={copyInfohash}>
+            <Copy className="h-3 w-3" />
+            Copy infohash
+          </Button>
+          <a
+            href={CROSS_SEED_DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            cross-seed docs
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
       </div>
     </ScrollArea>
   );
@@ -247,7 +322,8 @@ function FilesTab({ hash, contentHeight }: { hash: string; contentHeight: number
         ))}
       </div>
       <ScrollArea className="flex-1">
-        <table className="w-full text-xs">
+        <div className="overflow-x-auto">
+        <table className="min-w-[420px] w-full text-xs">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="px-4 py-1.5 text-left font-medium">File</th>
@@ -279,6 +355,7 @@ function FilesTab({ hash, contentHeight }: { hash: string; contentHeight: number
             ))}
           </tbody>
         </table>
+        </div>
       </ScrollArea>
     </div>
   );
@@ -293,12 +370,13 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
 
   return (
     <ScrollArea style={{ height: contentHeight }}>
-      <table className="w-full text-xs">
+      <div className="overflow-x-auto">
+      <table className="min-w-[360px] w-full text-xs">
         <thead>
           <tr className="border-b text-muted-foreground">
             <th className="px-4 py-1.5 text-left font-medium w-8"></th>
             <th className="px-2 py-1.5 text-left font-medium">IP</th>
-            <th className="px-2 py-1.5 text-left font-medium">Client</th>
+            <th className="hidden sm:table-cell px-2 py-1.5 text-left font-medium">Client</th>
             <th className="px-2 py-1.5 text-right font-medium w-20">Down</th>
             <th className="px-2 py-1.5 text-right font-medium w-20">Up</th>
             <th className="px-2 py-1.5 text-right font-medium w-16">Progress</th>
@@ -311,7 +389,7 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
                 {countryFlag(peer.country)}
               </td>
               <td className="px-2 py-1 font-mono">{peer.ip}</td>
-              <td className="px-2 py-1 truncate max-w-[150px]">{peer.client}</td>
+              <td className="hidden sm:table-cell px-2 py-1 truncate max-w-[150px]">{peer.client}</td>
               <td className="px-2 py-1 text-right">{formatSpeed(peer.down_speed)}</td>
               <td className="px-2 py-1 text-right">{formatSpeed(peer.up_speed)}</td>
               <td className="px-2 py-1 text-right">{(peer.progress * 100).toFixed(0)}%</td>
@@ -322,6 +400,7 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
           )}
         </tbody>
       </table>
+      </div>
     </ScrollArea>
   );
 }

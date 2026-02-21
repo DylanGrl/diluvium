@@ -20,7 +20,7 @@ export function TorrentActions({ selectedCount, onAction }: TorrentActionsProps)
   if (selectedCount === 0) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b bg-muted/30 px-3 py-1.5">
+    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/30 px-3 py-1.5">
       <span className="mr-2 text-xs text-muted-foreground">
         {selectedCount} selected
       </span>

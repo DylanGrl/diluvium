@@ -10,6 +10,7 @@ import { TorrentActions } from "@/components/torrents/torrent-actions";
 import { AddTorrentDialog } from "@/components/torrents/add-torrent";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { RemoveDialog } from "@/components/torrents/remove-dialog";
+import { QuickActionRemoveRatioDialog } from "@/components/torrents/quick-action-remove-ratio-dialog";
 import { NFODialog } from "@/components/torrents/nfo-dialog";
 import { toast } from "sonner";
 import { AlertCircle, RefreshCw, Upload } from "lucide-react";
@@ -26,6 +27,7 @@ export function DashboardPage() {
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [showNFODialog, setShowNFODialog] = useState(false);
   const [nfoHash, setNfoHash] = useState<string | null>(null);
+  const [showRemoveRatioDialog, setShowRemoveRatioDialog] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [globalDragOver, setGlobalDragOver] = useState(false);
@@ -200,6 +202,73 @@ export function DashboardPage() {
     setSearchQuery("");
   }, []);
 
+  const handleQuickAction = useCallback(
+    async (action: string) => {
+      try {
+        switch (action) {
+          case "pause_all": {
+            const hashes = torrentList.map((t) => t.hash);
+            if (hashes.length === 0) {
+              toast.info("No torrents to pause");
+              return;
+            }
+            await actions.pauseMutation.mutateAsync(hashes);
+            toast.success(`Paused ${hashes.length} torrent${hashes.length !== 1 ? "s" : ""}`);
+            break;
+          }
+          case "resume_all": {
+            const hashes = torrentList.map((t) => t.hash);
+            if (hashes.length === 0) {
+              toast.info("No torrents to resume");
+              return;
+            }
+            await actions.resumeMutation.mutateAsync(hashes);
+            toast.success(`Resumed ${hashes.length} torrent${hashes.length !== 1 ? "s" : ""}`);
+            break;
+          }
+          case "pause_all_completed": {
+            const hashes = torrentList
+              .filter((t) => t.state === "Seeding" || t.progress >= 100)
+              .map((t) => t.hash);
+            if (hashes.length === 0) {
+              toast.info("No completed torrents to pause");
+              return;
+            }
+            await actions.pauseMutation.mutateAsync(hashes);
+            toast.success(`Paused ${hashes.length} completed torrent${hashes.length !== 1 ? "s" : ""}`);
+            break;
+          }
+          case "resume_all_paused": {
+            const hashes = torrentList.filter((t) => t.state === "Paused").map((t) => t.hash);
+            if (hashes.length === 0) {
+              toast.info("No paused torrents to resume");
+              return;
+            }
+            await actions.resumeMutation.mutateAsync(hashes);
+            toast.success(`Resumed ${hashes.length} paused torrent${hashes.length !== 1 ? "s" : ""}`);
+            break;
+          }
+          case "remove_ratio_above":
+            setShowRemoveRatioDialog(true);
+            break;
+          default:
+            break;
+        }
+      } catch (err) {
+        toast.error(`Quick action failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    },
+    [torrentList, actions]
+  );
+
+  const handleRemoveRatioConfirm = useCallback(
+    (hashes: string[]) => {
+      setSelectedHashes(new Set(hashes));
+      setShowRemoveDialog(true);
+    },
+    []
+  );
+
   // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -309,6 +378,7 @@ export function DashboardPage() {
         onAddTorrent={() => setShowAddDialog(true)}
         onOpenSettings={() => setShowSettings(true)}
         onOpenMobileSidebar={() => setShowMobileSidebar(true)}
+        onQuickAction={handleQuickAction}
       />
 
       {/* Connection warning banner */}
@@ -391,6 +461,12 @@ export function DashboardPage() {
         onOpenChange={setShowRemoveDialog}
         names={selectedNames}
         onConfirm={handleRemoveConfirm}
+      />
+      <QuickActionRemoveRatioDialog
+        open={showRemoveRatioDialog}
+        onOpenChange={setShowRemoveRatioDialog}
+        torrents={torrentList}
+        onConfirm={handleRemoveRatioConfirm}
       />
       <NFODialog
         open={showNFODialog}

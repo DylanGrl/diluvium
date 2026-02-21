@@ -1,13 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "./pages/login";
 import { DashboardPage } from "./pages/dashboard";
 import { useAuth } from "./api/hooks";
 import { store, applyTheme } from "./lib/store";
 import { Droplets, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export function App() {
   const { sessionQuery } = useAuth();
+  const sessionErrorToastShown = useRef(false);
+
+  // Show "session expired" toast once when session check fails (e.g. Deluge restart, network)
+  useEffect(() => {
+    if (sessionQuery.isError && !sessionErrorToastShown.current) {
+      sessionErrorToastShown.current = true;
+      toast.error("Session expired or connection lost. Please log in again.");
+    }
+    if (sessionQuery.data === true) sessionErrorToastShown.current = false;
+  }, [sessionQuery.isError, sessionQuery.data]);
 
   // Apply persisted theme on mount + listen for system theme changes
   useEffect(() => {

@@ -12,6 +12,7 @@ import { Select, SelectOption } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Copy, Download, FileText, HardDrive } from "lucide-react";
 import { generateNFO, TEMPLATES, type NFOData, type TemplateId } from "@/lib/nfo-templates";
+import { sanitizeDownloadFilename } from "@/lib/utils";
 
 interface NFODialogProps {
   open: boolean;
@@ -132,7 +133,7 @@ function NFOTab({ hash, torrent }: { hash: string; torrent: TorrentStatus }) {
   }
 
   function handleDownload() {
-    const safeName = torrent.name.replace(/[/\\:*?"<>|]/g, "_");
+    const safeName = sanitizeDownloadFilename(torrent.name);
     const blob = new Blob([preview], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

@@ -69,3 +69,8 @@ export function progressColor(progress: number, state: string): string {
   if (progress >= 100) return "bg-ul";
   return "bg-dl";
 }
+
+/** Sanitize a string for use as a download filename (remove path/illegal chars). */
+export function sanitizeDownloadFilename(name: string): string {
+  return name.replace(/[/\\:*?"<>|]/g, "_");
+}
