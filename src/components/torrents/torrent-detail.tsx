@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import type { TorrentStatus, Peer } from "@/api/types";
 import { useTorrentFiles, useTorrentPeers, useTorrentActions } from "@/api/hooks";
 import { formatBytes, formatSpeed, formatDate, formatETA, formatRatio, cn, progressColor } from "@/lib/utils";
@@ -23,6 +24,7 @@ interface TorrentDetailProps {
   hash: string;
   torrent: TorrentStatus;
   onClose: () => void;
+  isMobile?: boolean;
 }
 
 // Country code to flag emoji
@@ -34,7 +36,7 @@ function countryFlag(code: string): string {
   );
 }
 
-export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
+export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetailProps) {
   const [activeTab, setActiveTab] = useState("general");
   const [panelHeight, setPanelHeight] = useState(store.getDetailPanelHeight());
   const draggingRef = useRef(false);
@@ -50,8 +52,10 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
     function onMouseMove(ev: MouseEvent) {
       if (!draggingRef.current) return;
       const delta = startYRef.current - ev.clientY;
-      const maxHeight = Math.min(600, window.innerHeight - 100);
-      const next = Math.max(150, Math.min(maxHeight, startHeightRef.current + delta));
+      const maxHeight = isMobile
+        ? Math.max(200, Math.min(window.innerHeight * 0.85, startHeightRef.current + delta))
+        : Math.min(600, window.innerHeight - 100);
+      const next = Math.max(isMobile ? 200 : 150, Math.min(maxHeight, startHeightRef.current + delta));
       setPanelHeight(next);
     }
 
@@ -70,7 +74,7 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-  }, [panelHeight]);
+  }, [panelHeight, isMobile]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
@@ -83,8 +87,10 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
       ev.preventDefault();
       const t = ev.touches[0];
       const delta = startYRef.current - t.clientY;
-      const maxHeight = Math.min(600, window.innerHeight - 100);
-      const next = Math.max(150, Math.min(maxHeight, startHeightRef.current + delta));
+      const maxHeight = isMobile
+        ? window.innerHeight * 0.85
+        : Math.min(600, window.innerHeight - 100);
+      const next = Math.max(isMobile ? 200 : 150, Math.min(maxHeight, startHeightRef.current + delta));
       setPanelHeight(next);
     }
 
@@ -102,12 +108,12 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
 
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onTouchEnd);
-  }, [panelHeight]);
+  }, [panelHeight, isMobile]);
 
   const contentHeight = panelHeight - 88; // drag handle + title bar + tabs
 
-  return (
-    <div className="shrink-0 border-t bg-card flex flex-col" style={{ height: panelHeight }}>
+  const panelContent = (
+    <>
       {/* Drag handle */}
       <div
         onMouseDown={handleMouseDown}
@@ -156,6 +162,29 @@ export function TorrentDetail({ hash, torrent, onClose }: TorrentDetailProps) {
           </TabsContent>
         </div>
       </Tabs>
+    </>
+  );
+
+  if (isMobile) {
+    return createPortal(
+      <div className="fixed inset-0 z-40">
+        {/* Backdrop */}
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        {/* Bottom sheet */}
+        <div
+          className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-xl bg-card animate-in slide-in-from-bottom"
+          style={{ height: panelHeight, maxHeight: "85vh" }}
+        >
+          {panelContent}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return (
+    <div className="shrink-0 border-t bg-card flex flex-col" style={{ height: panelHeight }}>
+      {panelContent}
     </div>
   );
 }

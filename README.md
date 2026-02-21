@@ -19,6 +19,7 @@ A modern web UI for the [Deluge](https://deluge-torrent.org/) BitTorrent client.
 - Country flags for peers
 - Multiple themes: Light, Dark, System, Catppuccin (Mocha/Latte), Nord (Dark/Light)
 - Keyboard shortcuts (A=add, N=nfo, Space=pause/resume, Del=remove, Ctrl+F=search)
+- Mobile-friendly: card view on narrow screens, slide-up detail sheet, touch-optimised action toolbar
 
 ## Prerequisites
 
@@ -56,6 +57,8 @@ The output is in `dist/`. Use the provided Docker image (recommended) or place t
 
 The Docker image uses nginx to both serve the UI and proxy API calls to Deluge. This avoids CORS entirely — the browser always talks to the same origin (the nginx container), which forwards `/json` and `/upload` requests to your Deluge instance.
 
+Published images support **linux/amd64** and **linux/arm64** (Raspberry Pi, Apple Silicon NAS, etc.).
+
 ### Quick start
 
 ```bash
@@ -69,6 +72,17 @@ docker build -t diluvium .
 docker run -p 3000:80 -e DELUGE_URL=http://192.168.1.x:8112 diluvium
 ```
 
+### Cross-platform local build
+
+Use `docker buildx` to build for both architectures in a single command:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t grldylan/diluvium:latest \
+  --push .
+```
+
 ### Docker Compose
 
 Edit `docker-compose.yml` and set `DELUGE_URL` to your Deluge address, then:
@@ -80,6 +94,23 @@ docker compose up -d
 Diluvium will be available at http://localhost:3000.
 
 > **No rebuild needed** — `DELUGE_URL` is read at container startup. Just update the env var and restart.
+
+## CI/CD
+
+A GitHub Actions workflow (`.github/workflows/docker.yml`) automatically builds and pushes multi-platform images to Docker Hub on every push to `main` and on version tags.
+
+| Event | Tags pushed |
+|-------|-------------|
+| Push to `main` | `latest`, `main` |
+| Tag `v1.2.3` | `1.2.3`, `1.2`, `latest` |
+| Pull request | Build only (no push) |
+
+**Required repository secrets:**
+
+| Secret | Description |
+|--------|-------------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (Settings → Security → New Access Token) |
 
 ## Environment Variables
 

@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type DragEvent } from "react";
 import { useConnection, useUpdateUI, useTorrentActions, useExternalIP } from "@/api/hooks";
-import type { TorrentStatus, FilterState } from "@/api/types";
+import type { TorrentStatus } from "@/api/types";
+import { store } from "@/lib/store";
 import { AppShell } from "@/components/layout/app-shell";
 import { Header } from "@/components/layout/header";
 import { Sidebar, MobileSidebar } from "@/components/layout/sidebar";
 import { TorrentTable } from "@/components/torrents/torrent-table";
+import { TorrentCardList } from "@/components/torrents/torrent-card-list";
 import { TorrentDetail } from "@/components/torrents/torrent-detail";
 import { TorrentActions } from "@/components/torrents/torrent-actions";
 import { AddTorrentDialog } from "@/components/torrents/add-torrent";
@@ -12,24 +14,37 @@ import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { RemoveDialog } from "@/components/torrents/remove-dialog";
 import { QuickActionRemoveRatioDialog } from "@/components/torrents/quick-action-remove-ratio-dialog";
 import { NFODialog } from "@/components/torrents/nfo-dialog";
+import { useDashboardState } from "@/hooks/use-dashboard-state";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useTorrentNotifications } from "@/hooks/use-torrent-notifications";
+import { useSessionStats } from "@/hooks/use-session-stats";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { AlertCircle, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function DashboardPage() {
+  const {
+    stateFilter, setStateFilter,
+    trackerFilter, setTrackerFilter,
+    labelFilter, setLabelFilter,
+    searchQuery, setSearchQuery,
+    filterDict,
+    hasActiveFilters,
+    clearFilters,
+    showAddDialog, setShowAddDialog,
+    showSettings, setShowSettings,
+    showRemoveDialog, setShowRemoveDialog,
+    showNFODialog, setShowNFODialog,
+    nfoHash, setNfoHash,
+    showRemoveRatioDialog, setShowRemoveRatioDialog,
+    showMobileSidebar, setShowMobileSidebar,
+  } = useDashboardState();
+
+  const isMobile = useIsMobile();
+
   const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
   const [detailHash, setDetailHash] = useState<string | null>(null);
-  const [stateFilter, setStateFilter] = useState<FilterState>("All");
-  const [trackerFilter, setTrackerFilter] = useState<string>("All");
-  const [labelFilter, setLabelFilter] = useState<string>("All");
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
-  const [showNFODialog, setShowNFODialog] = useState(false);
-  const [nfoHash, setNfoHash] = useState<string | null>(null);
-  const [showRemoveRatioDialog, setShowRemoveRatioDialog] = useState(false);
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const lastSelectedRef = useRef<string | null>(null);
 
@@ -46,19 +61,12 @@ export function DashboardPage() {
     }
   }, [connectedQuery.data, connectToFirst]);
 
-  const filterDict: Record<string, string> = {};
-  if (stateFilter !== "All") filterDict.state = stateFilter;
-  if (trackerFilter !== "All") filterDict.tracker_host = trackerFilter;
-  if (labelFilter !== "All") filterDict.label = labelFilter;
-
   const { data: uiData, isLoading: uiLoading } = useUpdateUI(filterDict, isConnected);
   const actions = useTorrentActions();
 
   const torrents = uiData?.torrents ?? {};
   const filters = uiData?.filters;
   const stats = uiData?.stats;
-
-  const hasActiveFilters = stateFilter !== "All" || trackerFilter !== "All" || labelFilter !== "All" || searchQuery !== "";
 
   const torrentList = useMemo(() => {
     const list: (TorrentStatus & { hash: string })[] = Object.entries(torrents).map(
@@ -78,10 +86,16 @@ export function DashboardPage() {
       .filter(Boolean) as string[];
   }, [selectedHashes, torrents]);
 
+  // Session stats
+  const sessionStats = useSessionStats(stats);
+
+  // Torrent completion notifications
+  const notificationsEnabled = store.getNotificationsEnabled();
+  useTorrentNotifications(torrents, notificationsEnabled);
+
   const handleSelect = useCallback((hash: string, multi: boolean, shift?: boolean) => {
     setSelectedHashes((prev) => {
       if (shift && lastSelectedRef.current) {
-        // Shift+click range selection
         const hashes = torrentList.map((t) => t.hash);
         const startIdx = hashes.indexOf(lastSelectedRef.current);
         const endIdx = hashes.indexOf(hash);
@@ -176,7 +190,7 @@ export function DashboardPage() {
         toast.error(`Action failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     },
-    [selectedHashes, actions, torrents]
+    [selectedHashes, actions, torrents, setShowRemoveDialog, setNfoHash, setShowNFODialog]
   );
 
   const handleRemoveConfirm = useCallback(
@@ -192,15 +206,8 @@ export function DashboardPage() {
       }
       setShowRemoveDialog(false);
     },
-    [selectedHashes, actions]
+    [selectedHashes, actions, setShowRemoveDialog]
   );
-
-  const clearFilters = useCallback(() => {
-    setStateFilter("All");
-    setTrackerFilter("All");
-    setLabelFilter("All");
-    setSearchQuery("");
-  }, []);
 
   const handleQuickAction = useCallback(
     async (action: string) => {
@@ -208,20 +215,14 @@ export function DashboardPage() {
         switch (action) {
           case "pause_all": {
             const hashes = torrentList.map((t) => t.hash);
-            if (hashes.length === 0) {
-              toast.info("No torrents to pause");
-              return;
-            }
+            if (hashes.length === 0) { toast.info("No torrents to pause"); return; }
             await actions.pauseMutation.mutateAsync(hashes);
             toast.success(`Paused ${hashes.length} torrent${hashes.length !== 1 ? "s" : ""}`);
             break;
           }
           case "resume_all": {
             const hashes = torrentList.map((t) => t.hash);
-            if (hashes.length === 0) {
-              toast.info("No torrents to resume");
-              return;
-            }
+            if (hashes.length === 0) { toast.info("No torrents to resume"); return; }
             await actions.resumeMutation.mutateAsync(hashes);
             toast.success(`Resumed ${hashes.length} torrent${hashes.length !== 1 ? "s" : ""}`);
             break;
@@ -230,20 +231,14 @@ export function DashboardPage() {
             const hashes = torrentList
               .filter((t) => t.state === "Seeding" || t.progress >= 100)
               .map((t) => t.hash);
-            if (hashes.length === 0) {
-              toast.info("No completed torrents to pause");
-              return;
-            }
+            if (hashes.length === 0) { toast.info("No completed torrents to pause"); return; }
             await actions.pauseMutation.mutateAsync(hashes);
             toast.success(`Paused ${hashes.length} completed torrent${hashes.length !== 1 ? "s" : ""}`);
             break;
           }
           case "resume_all_paused": {
             const hashes = torrentList.filter((t) => t.state === "Paused").map((t) => t.hash);
-            if (hashes.length === 0) {
-              toast.info("No paused torrents to resume");
-              return;
-            }
+            if (hashes.length === 0) { toast.info("No paused torrents to resume"); return; }
             await actions.resumeMutation.mutateAsync(hashes);
             toast.success(`Resumed ${hashes.length} paused torrent${hashes.length !== 1 ? "s" : ""}`);
             break;
@@ -258,7 +253,7 @@ export function DashboardPage() {
         toast.error(`Quick action failed: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     },
-    [torrentList, actions]
+    [torrentList, actions, setShowRemoveRatioDialog]
   );
 
   const handleRemoveRatioConfirm = useCallback(
@@ -266,78 +261,35 @@ export function DashboardPage() {
       setSelectedHashes(new Set(hashes));
       setShowRemoveDialog(true);
     },
-    []
+    [setShowRemoveDialog]
   );
 
   // Keyboard shortcuts
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      switch (e.key) {
-        case "a":
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            handleSelectAll();
-          } else {
-            e.preventDefault();
-            setShowAddDialog(true);
-          }
-          break;
-        case "Delete":
-        case "Backspace":
-          if (selectedHashes.size > 0) {
-            e.preventDefault();
-            setShowRemoveDialog(true);
-          }
-          break;
-        case " ":
-          if (selectedHashes.size > 0) {
-            e.preventDefault();
-            const firstHash = Array.from(selectedHashes)[0];
-            const t = torrents[firstHash];
-            if (t?.state === "Paused") handleAction("resume");
-            else handleAction("pause");
-          }
-          break;
-        case "Escape":
-          setDetailHash(null);
-          setSelectedHashes(new Set());
-          break;
-        case "n":
-          if (!e.ctrlKey && !e.metaKey && selectedHashes.size > 0) {
-            e.preventDefault();
-            const firstHash = Array.from(selectedHashes)[0];
-            setNfoHash(firstHash);
-            setShowNFODialog(true);
-          }
-          break;
-        case "f":
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            document.getElementById("torrent-search")?.focus();
-          }
-          break;
+  useKeyboardShortcuts({
+    onAddTorrent: () => setShowAddDialog(true),
+    onRemove: () => setShowRemoveDialog(true),
+    onTogglePause: () => {
+      const firstHash = Array.from(selectedHashes)[0];
+      const t = torrents[firstHash];
+      if (t?.state === "Paused") handleAction("resume");
+      else handleAction("pause");
+    },
+    onDeselect: () => {
+      setDetailHash(null);
+      setSelectedHashes(new Set());
+    },
+    onNFO: () => {
+      const firstHash = Array.from(selectedHashes)[0];
+      if (firstHash) {
+        setNfoHash(firstHash);
+        setShowNFODialog(true);
       }
-    }
-
-    // Global paste handler for magnet links
-    function handlePaste(e: ClipboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const text = e.clipboardData?.getData("text");
-      if (text?.startsWith("magnet:")) {
-        e.preventDefault();
-        setShowAddDialog(true);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("paste", handlePaste);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("paste", handlePaste);
-    };
-  }, [selectedHashes, handleAction, handleSelectAll, torrents]);
+    },
+    onSearch: () => document.getElementById("torrent-search")?.focus(),
+    onSelectAll: handleSelectAll,
+    onMagnetPaste: () => setShowAddDialog(true),
+    hasSelection: selectedHashes.size > 0,
+  });
 
   // Global drag-and-drop
   const handleGlobalDragOver = useCallback((e: DragEvent) => {
@@ -361,7 +313,7 @@ export function DashboardPage() {
     } else if (files.length > 0) {
       toast.error("Only .torrent files are accepted");
     }
-  }, []);
+  }, [setShowAddDialog]);
 
   return (
     <AppShell
@@ -371,6 +323,7 @@ export function DashboardPage() {
     >
       <Header
         stats={stats}
+        sessionStats={sessionStats}
         isConnected={isConnected}
         externalIP={externalIP}
         searchQuery={searchQuery}
@@ -424,21 +377,34 @@ export function DashboardPage() {
             selectedCount={selectedHashes.size}
             onAction={handleAction}
           />
-          <TorrentTable
-            torrents={torrentList}
-            selectedHashes={selectedHashes}
-            onSelect={handleSelect}
-            onSelectAll={handleSelectAll}
-            onAction={handleAction}
-            isLoading={uiLoading}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearFilters}
-          />
+          {isMobile ? (
+            <TorrentCardList
+              torrents={torrentList}
+              selectedHashes={selectedHashes}
+              onSelect={handleSelect}
+              onAction={handleAction}
+              isLoading={uiLoading}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearFilters}
+            />
+          ) : (
+            <TorrentTable
+              torrents={torrentList}
+              selectedHashes={selectedHashes}
+              onSelect={handleSelect}
+              onSelectAll={handleSelectAll}
+              onAction={handleAction}
+              isLoading={uiLoading}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearFilters}
+            />
+          )}
           {detailHash && selectedTorrent && (
             <TorrentDetail
               hash={detailHash}
               torrent={selectedTorrent}
               onClose={() => setDetailHash(null)}
+              isMobile={isMobile}
             />
           )}
         </div>
