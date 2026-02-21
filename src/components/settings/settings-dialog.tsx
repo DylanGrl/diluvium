@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { LogOut } from "lucide-react";
+import { Bell, BellOff, LogOut } from "lucide-react";
 
 const THEMES: { id: ThemeMode; label: string; preview: string }[] = [
   { id: "light", label: "Light", preview: "bg-white border-zinc-200" },
@@ -27,6 +27,12 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [tab, setTab] = useState("general");
   const [theme, setTheme] = useState<ThemeMode>(store.getTheme());
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    store.getNotificationsEnabled(),
+  );
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "denied",
+  );
   const { logoutMutation } = useAuth();
 
   function setThemeMode(mode: ThemeMode) {
@@ -35,9 +41,29 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     applyTheme(mode);
   }
 
+  function toggleNotifications(enabled: boolean) {
+    setNotificationsEnabled(enabled);
+    store.setNotificationsEnabled(enabled);
+  }
+
+  async function requestNotificationPermission() {
+    const permission = await Notification.requestPermission();
+    setNotifPermission(permission);
+    if (permission === "granted") {
+      toggleNotifications(true);
+      toast.success("Notifications enabled");
+    } else {
+      toast.error("Notification permission denied");
+    }
+  }
+
   async function handleLogout() {
-    await logoutMutation.mutateAsync();
-    onOpenChange(false);
+    try {
+      await logoutMutation.mutateAsync();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(`Logout failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   }
 
   return (
@@ -74,6 +100,44 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <Label>Notifications</Label>
+                <p className="text-xs text-muted-foreground">
+                  Get a desktop notification when a torrent finishes downloading.
+                </p>
+                {notifPermission === "granted" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleNotifications(!notificationsEnabled)}
+                  >
+                    {notificationsEnabled ? (
+                      <>
+                        <Bell className="mr-1.5 h-3.5 w-3.5" />
+                        Enabled — click to disable
+                      </>
+                    ) : (
+                      <>
+                        <BellOff className="mr-1.5 h-3.5 w-3.5" />
+                        Disabled — click to enable
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={requestNotificationPermission}
+                    disabled={notifPermission === "denied"}
+                  >
+                    <Bell className="mr-1.5 h-3.5 w-3.5" />
+                    {notifPermission === "denied"
+                      ? "Blocked by browser — allow in browser settings"
+                      : "Allow notifications"}
+                  </Button>
+                )}
               </div>
 
               <div className="border-t pt-4">

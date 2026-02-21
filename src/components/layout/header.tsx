@@ -1,4 +1,5 @@
 import type { UpdateUIResult } from "@/api/types";
+import type { SessionStats } from "@/hooks/use-session-stats";
 import { formatSpeed, formatBytes } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import {
 
 interface HeaderProps {
   stats?: UpdateUIResult["stats"];
+  sessionStats?: SessionStats;
   isConnected: boolean;
   externalIP?: string;
   searchQuery: string;
@@ -38,6 +40,7 @@ interface HeaderProps {
 
 export function Header({
   stats,
+  sessionStats,
   isConnected,
   externalIP,
   searchQuery,
@@ -121,6 +124,17 @@ export function Header({
             <div className="hidden text-xs text-muted-foreground lg:block">
               DHT: {stats.dht_nodes}
             </div>
+          </div>
+        )}
+        {sessionStats && (sessionStats.totalDownloaded > 0 || sessionStats.totalUploaded > 0) && (
+          <div
+            className="hidden xl:flex items-center gap-1.5 text-xs text-muted-foreground border-l pl-3"
+            title="Session totals"
+          >
+            <ArrowDown className="h-3 w-3 text-dl" />
+            <span>{formatBytes(sessionStats.totalDownloaded)}</span>
+            <ArrowUp className="h-3 w-3 text-ul ml-1" />
+            <span>{formatBytes(sessionStats.totalUploaded)}</span>
           </div>
         )}
 

@@ -3,6 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { delugeClient } from "./client";
 import type { Peer, TorrentNFOData, TorrentStatus, UpdateUIResult } from "./types";
 
@@ -95,6 +96,9 @@ export function useConnection() {
     mutationFn: (hostId: string) => delugeClient.connect(hostId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connection", "connected"] });
+    },
+    onError: (err) => {
+      toast.error(`Failed to connect: ${err instanceof Error ? err.message : "Unknown error"}`);
     },
   });
 

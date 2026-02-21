@@ -74,4 +74,7 @@ export const store = {
 
   getDefaultDownloadLocation: () => getItem<string>("download_location", ""),
   setDefaultDownloadLocation: (path: string) => setItem("download_location", path),
+
+  getNotificationsEnabled: () => getItem<boolean>("notifications_enabled", false),
+  setNotificationsEnabled: (enabled: boolean) => setItem("notifications_enabled", enabled),
 };
