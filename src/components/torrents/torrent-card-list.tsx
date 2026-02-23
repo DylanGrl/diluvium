@@ -1,7 +1,14 @@
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
-import { cn, formatBytes, formatSpeed, torrentStateColor, progressColor } from "@/lib/utils";
+import {
+  cn,
+  formatBytes,
+  formatSpeed,
+  formatETA,
+  torrentStateColor,
+  progressColor,
+} from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Plus, Search, FilterX } from "lucide-react";
 
-const CARD_HEIGHT_PX = 80;
+const CARD_HEIGHT_PX = 88;
 
 interface TorrentCardListProps {
   torrents: (TorrentStatus & { hash: string })[];
@@ -77,10 +84,7 @@ export function TorrentCardList({
   }
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 overflow-auto px-3 py-2"
-    >
+    <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-2">
       <div
         className="relative w-full"
         style={{ height: `${virtualizer.getTotalSize()}px` }}
@@ -91,7 +95,7 @@ export function TorrentCardList({
           return (
             <div
               key={torrent.hash}
-              className="absolute left-0 w-full px-0 pb-2"
+              className="absolute left-0 w-full pb-2"
               style={{
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
@@ -124,14 +128,14 @@ function TorrentCard({
 }) {
   const stateColor = torrentStateColor(torrent.state);
   const barColor = progressColor(torrent.progress, torrent.state);
+  const isDownloading = torrent.state === "Downloading";
+  const showETA = isDownloading && torrent.eta > 0 && isFinite(torrent.eta);
 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg border bg-card px-3 h-[72px] cursor-pointer transition-colors",
-        selected
-          ? "bg-accent ring-1 ring-ring"
-          : "hover:bg-muted/50"
+        "flex items-center gap-3 rounded-lg border bg-card px-3 h-[80px] cursor-pointer transition-colors",
+        selected ? "bg-accent ring-1 ring-ring" : "hover:bg-muted/50"
       )}
       onClick={() => onSelect(torrent.hash, false)}
     >
@@ -140,27 +144,46 @@ function TorrentCard({
 
       {/* Main content */}
       <div className="flex flex-1 flex-col gap-1 min-w-0">
+        {/* Name */}
         <p className="truncate text-sm font-medium leading-tight">{torrent.name}</p>
-        {/* Progress bar */}
-        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-all", barColor)}
-            style={{ width: `${Math.min(torrent.progress, 100)}%` }}
-          />
+
+        {/* Progress bar + percentage */}
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn("h-full rounded-full", barColor)}
+              style={{ width: `${Math.min(torrent.progress, 100)}%` }}
+            />
+          </div>
+          <span className="w-8 shrink-0 text-right text-xs text-muted-foreground">
+            {torrent.progress.toFixed(0)}%
+          </span>
         </div>
-        {/* Stats row */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>↓ {formatSpeed(torrent.download_payload_rate)}</span>
-          <span>↑ {formatSpeed(torrent.upload_payload_rate)}</span>
-          <span className="ml-auto">{formatBytes(torrent.total_size)}</span>
+
+        {/* Stats row: state · speeds · size or ETA */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className={cn("shrink-0 font-medium", stateColor)}>
+            {torrent.state}
+          </span>
+          <span className="shrink-0">·</span>
+          <span className="shrink-0">↓ {formatSpeed(torrent.download_payload_rate)}</span>
+          <span className="shrink-0">↑ {formatSpeed(torrent.upload_payload_rate)}</span>
+          {showETA ? (
+            <span className="ml-auto shrink-0">ETA {formatETA(torrent.eta)}</span>
+          ) : (
+            <span className="ml-auto shrink-0">{formatBytes(torrent.total_size)}</span>
+          )}
         </div>
       </div>
 
-      {/* Action menu */}
+      {/* Action menu — selects the torrent first so actions target the right one */}
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="shrink-0 rounded p-1 opacity-60 hover:opacity-100 hover:bg-muted transition-colors"
-          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 rounded p-1.5 opacity-60 hover:opacity-100 hover:bg-muted transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(torrent.hash, false);
+          }}
           aria-label="Torrent actions"
         >
           <MoreVertical className="h-4 w-4" />
