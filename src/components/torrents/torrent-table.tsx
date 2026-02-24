@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
-import { cn, formatBytes, formatSpeed, formatETA, formatRatio, torrentStateColor, progressColor } from "@/lib/utils";
+import { cn, formatBytes, formatSpeed, formatETA, formatRatio, ratioColor, torrentStateColor, progressColor } from "@/lib/utils";
 import { store } from "@/lib/store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
@@ -29,10 +29,10 @@ const ALL_COLUMNS = [
   { key: "state", label: "Status", className: "w-20 sm:w-24 min-w-[5.5rem]", hideBelow: "sm" as const },
   { key: "download_payload_rate", label: "Down", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
   { key: "upload_payload_rate", label: "Up", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
-  { key: "eta", label: "ETA", className: "w-20 min-w-[4.5rem] text-right", hideBelow: "lg" as const },
-  { key: "ratio", label: "Ratio", className: "w-16 min-w-[4.5rem] text-right", hideBelow: "lg" as const },
-  { key: "num_seeds", label: "Seeds", className: "w-20 text-right", hideBelow: "xl" as const },
-  { key: "num_peers", label: "Peers", className: "w-20 text-right", hideBelow: "xl" as const },
+  { key: "eta", label: "ETA", className: "w-20 min-w-[4.5rem] text-right", hideBelow: "md" as const },
+  { key: "ratio", label: "Ratio", className: "w-16 min-w-[4.5rem] text-right", hideBelow: "md" as const },
+  { key: "num_seeds", label: "Seeds", className: "w-20 text-right", hideBelow: "lg" as const },
+  { key: "num_peers", label: "Peers", className: "w-20 text-right", hideBelow: "lg" as const },
 ] as const;
 
 function getResponsiveClass(col: typeof ALL_COLUMNS[number]): string {
@@ -169,7 +169,7 @@ export function TorrentTable({
               <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)} />
               <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-md border bg-popover p-2 shadow-md">
                 {ALL_COLUMNS.map((col) => (
-                  <label key={col.key} className="flex items-center gap-2 py-1 text-xs cursor-pointer hover:text-foreground">
+                  <label key={col.key} className="flex items-center gap-2 py-1 text-xs cursor-pointer select-none hover:text-foreground">
                     <Checkbox
                       checked={visibleColumns.includes(col.key)}
                       onCheckedChange={() => toggleColumn(col.key)}
@@ -392,7 +392,7 @@ function TorrentCell({ col, torrent }: { col: typeof ALL_COLUMNS[number]; torren
     case "eta":
       return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{torrent.eta > 0 ? formatETA(torrent.eta) : "—"}</div>;
     case "ratio":
-      return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{formatRatio(torrent.ratio)}</div>;
+      return <div className={cn("px-2 py-2 text-xs font-medium", cls, ratioColor(torrent.ratio))}>{formatRatio(torrent.ratio)}</div>;
     case "num_seeds":
       return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{torrent.num_seeds} ({torrent.total_seeds})</div>;
     case "num_peers":

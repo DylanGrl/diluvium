@@ -6,6 +6,8 @@ import {
   formatBytes,
   formatSpeed,
   formatETA,
+  formatRatio,
+  ratioColor,
   torrentStateColor,
   progressColor,
 } from "@/lib/utils";
@@ -160,7 +162,7 @@ function TorrentCard({
           </span>
         </div>
 
-        {/* Stats row: state · speeds · size or ETA */}
+        {/* Stats row: state · speeds · ratio or ETA */}
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className={cn("shrink-0 font-medium", stateColor)}>
             {torrent.state}
@@ -171,7 +173,7 @@ function TorrentCard({
           {showETA ? (
             <span className="ml-auto shrink-0">ETA {formatETA(torrent.eta)}</span>
           ) : (
-            <span className="ml-auto shrink-0">{formatBytes(torrent.total_size)}</span>
+            <span className={cn("ml-auto shrink-0 font-medium", ratioColor(torrent.ratio))}>R {formatRatio(torrent.ratio)}</span>
           )}
         </div>
       </div>

@@ -33,6 +33,14 @@ export function formatRatio(ratio: number): string {
   return ratio.toFixed(2);
 }
 
+export function ratioColor(ratio: number): string {
+  if (ratio < 0) return "text-ul"; // ∞ — seeding forever, treat as good
+  if (ratio < 1) return "text-state-error";
+  if (ratio < 2) return "text-state-warning";
+  if (ratio < 5) return "text-ul";
+  return "text-brand";
+}
+
 export function formatDate(timestamp: number): string {
   if (timestamp <= 0) return "—";
   return new Date(timestamp * 1000).toLocaleDateString(undefined, {
