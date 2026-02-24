@@ -80,7 +80,7 @@ function NetworkInfoButton({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 min-w-[210px] rounded-md border bg-popover p-3 shadow-lg space-y-1.5 text-xs">
+          <div className="absolute right-0 top-full z-50 mt-1 w-56 max-w-[calc(100vw-1rem)] rounded-md border bg-popover p-3 shadow-lg space-y-1.5 text-xs">
             {/* Connection status */}
             <div className="flex items-center justify-between gap-6">
               <span className="text-muted-foreground">Status</span>
