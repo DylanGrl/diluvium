@@ -56,6 +56,10 @@ export interface Tracker {
   url: string;
   tier: number;
   message: string;
+  seeds: number;
+  peers: number;
+  next_announce: number;
+  updating: boolean;
 }
 
 export interface UpdateUIResult {

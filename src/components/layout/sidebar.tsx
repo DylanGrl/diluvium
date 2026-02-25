@@ -1,4 +1,4 @@
-import type { UpdateUIResult, FilterState } from "@/api/types";
+import type { UpdateUIResult, FilterState, TorrentStatus } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { RatioStats } from "@/components/stats/ratio-stats";
 
 interface SidebarContentProps {
   filters?: UpdateUIResult["filters"];
@@ -22,6 +23,7 @@ interface SidebarContentProps {
   onStateFilter: (s: FilterState) => void;
   onTrackerFilter: (s: string) => void;
   onLabelFilter: (s: string) => void;
+  torrents?: (TorrentStatus & { hash: string })[];
 }
 
 const stateIcons: Record<string, React.ReactNode> = {
@@ -43,6 +45,7 @@ function SidebarContent({
   onStateFilter,
   onTrackerFilter,
   onLabelFilter,
+  torrents,
 }: SidebarContentProps) {
   const stateFilters = filters?.state ?? [["All", 0]];
   const trackerFilters = filters?.tracker_host ?? [];
@@ -50,6 +53,7 @@ function SidebarContent({
 
   return (
     <div className="p-3 space-y-4">
+      {/* State */}
       <div>
         <h3 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           State
@@ -74,6 +78,38 @@ function SidebarContent({
         </div>
       </div>
 
+      {/* 📊 Statistics — replaces tracker in primary position */}
+      {torrents && torrents.length > 0 && (
+        <RatioStats torrents={torrents} />
+      )}
+
+      {/* Labels */}
+      {labelFilters.length > 0 && (
+        <div>
+          <h3 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Label
+          </h3>
+          <div className="space-y-0.5">
+            {labelFilters.map(([label, count]) => (
+              <button
+                key={label}
+                onClick={() => onLabelFilter(label)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                  labelFilter === label
+                    ? "bg-accent text-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                )}
+              >
+                <span className="flex-1 truncate text-left">{label || "No label"}</span>
+                <span className="text-xs text-muted-foreground">{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tracker — moved to bottom */}
       {trackerFilters.length > 0 && (
         <div>
           <h3 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -93,33 +129,6 @@ function SidebarContent({
               >
                 <span className="flex-1 truncate text-left">
                   {tracker || "No tracker"}
-                </span>
-                <span className="text-xs text-muted-foreground">{count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {labelFilters.length > 0 && (
-        <div>
-          <h3 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Label
-          </h3>
-          <div className="space-y-0.5">
-            {labelFilters.map(([label, count]) => (
-              <button
-                key={label}
-                onClick={() => onLabelFilter(label)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                  labelFilter === label
-                    ? "bg-accent text-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
-                )}
-              >
-                <span className="flex-1 truncate text-left">
-                  {label || "No label"}
                 </span>
                 <span className="text-xs text-muted-foreground">{count}</span>
               </button>

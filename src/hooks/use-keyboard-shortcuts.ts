@@ -9,6 +9,8 @@ interface KeyboardShortcutActions {
   onSearch: () => void;
   onSelectAll: () => void;
   onMagnetPaste: () => void;
+  onNavigateUp: () => void;
+  onNavigateDown: () => void;
   hasSelection: boolean;
 }
 
@@ -22,12 +24,18 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
     onSearch,
     onSelectAll,
     onMagnetPaste,
+    onNavigateUp,
+    onNavigateDown,
     hasSelection,
   } = actions;
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) return;
 
       switch (e.key) {
         case "a":
@@ -67,11 +75,23 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
             onSearch();
           }
           break;
+        case "ArrowUp":
+          e.preventDefault();
+          onNavigateUp();
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          onNavigateDown();
+          break;
       }
     }
 
     function handlePaste(e: ClipboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) return;
       const text = e.clipboardData?.getData("text");
       if (text?.startsWith("magnet:")) {
         e.preventDefault();
@@ -94,6 +114,8 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
     onSearch,
     onSelectAll,
     onMagnetPaste,
+    onNavigateUp,
+    onNavigateDown,
     hasSelection,
   ]);
 }

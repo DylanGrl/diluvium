@@ -12,6 +12,7 @@ import { TorrentActions } from "@/components/torrents/torrent-actions";
 import { AddTorrentDialog } from "@/components/torrents/add-torrent";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { RemoveDialog } from "@/components/torrents/remove-dialog";
+import { MoveStorageDialog } from "@/components/torrents/move-storage-dialog";
 import { QuickActionRemoveRatioDialog } from "@/components/torrents/quick-action-remove-ratio-dialog";
 import { NFODialog } from "@/components/torrents/nfo-dialog";
 import { useDashboardState } from "@/hooks/use-dashboard-state";
@@ -20,7 +21,7 @@ import { useTorrentNotifications } from "@/hooks/use-torrent-notifications";
 import { useSessionStats } from "@/hooks/use-session-stats";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import { AlertCircle, RefreshCw, Upload } from "lucide-react";
+import { AlertCircle, RefreshCw, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function DashboardPage() {
@@ -46,6 +47,7 @@ export function DashboardPage() {
   const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
   const [detailHash, setDetailHash] = useState<string | null>(null);
   const [globalDragOver, setGlobalDragOver] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
   const lastSelectedRef = useRef<string | null>(null);
 
   const { connectedQuery, connectToFirst } = useConnection();
@@ -185,6 +187,9 @@ export function DashboardPage() {
             setShowNFODialog(true);
             return;
           }
+          case "move_storage":
+            setShowMoveDialog(true);
+            return;
         }
       } catch (err) {
         toast.error(`Action failed: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -264,6 +269,35 @@ export function DashboardPage() {
     [setShowRemoveDialog]
   );
 
+  // Arrow-key navigation through the torrent list, using same sort as the table
+  const handleNavigate = useCallback((dir: "up" | "down") => {
+    if (torrentList.length === 0) return;
+    const col = store.getSortColumn();
+    const sortDir = store.getSortDirection() as "asc" | "desc";
+    const sorted = [...torrentList].sort((a, b) => {
+      const va = (a as unknown as Record<string, unknown>)[col] ?? "";
+      const vb = (b as unknown as Record<string, unknown>)[col] ?? "";
+      const cmp = typeof va === "string" && typeof vb === "string"
+        ? va.localeCompare(vb)
+        : (va as number) < (vb as number) ? -1 : (va as number) > (vb as number) ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    const hashes = sorted.map((t) => t.hash);
+    const currentIdx = detailHash ? hashes.indexOf(detailHash) : -1;
+    let nextIdx: number;
+    if (currentIdx < 0) {
+      nextIdx = dir === "down" ? 0 : hashes.length - 1;
+    } else {
+      nextIdx = dir === "down"
+        ? Math.min(currentIdx + 1, hashes.length - 1)
+        : Math.max(currentIdx - 1, 0);
+    }
+    const nextHash = hashes[nextIdx];
+    setSelectedHashes(new Set([nextHash]));
+    setDetailHash(nextHash);
+    lastSelectedRef.current = nextHash;
+  }, [torrentList, detailHash]);
+
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onAddTorrent: () => setShowAddDialog(true),
@@ -288,6 +322,8 @@ export function DashboardPage() {
     onSearch: () => document.getElementById("torrent-search")?.focus(),
     onSelectAll: handleSelectAll,
     onMagnetPaste: () => setShowAddDialog(true),
+    onNavigateUp: () => handleNavigate("up"),
+    onNavigateDown: () => handleNavigate("down"),
     hasSelection: selectedHashes.size > 0,
   });
 
@@ -360,6 +396,7 @@ export function DashboardPage() {
           onStateFilter={setStateFilter}
           onTrackerFilter={setTrackerFilter}
           onLabelFilter={setLabelFilter}
+          torrents={torrentList}
         />
         <MobileSidebar
           open={showMobileSidebar}
@@ -371,8 +408,23 @@ export function DashboardPage() {
           onStateFilter={setStateFilter}
           onTrackerFilter={setTrackerFilter}
           onLabelFilter={setLabelFilter}
+          torrents={torrentList}
         />
         <div className="flex flex-1 flex-col overflow-hidden">
+          {selectedHashes.size > 1 && (
+            <div className="flex shrink-0 items-center gap-2 border-b bg-accent/30 px-3 py-1.5 text-sm flex-wrap">
+              <span className="text-muted-foreground font-medium shrink-0">{selectedHashes.size} selected</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleAction("pause")}>Pause</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleAction("resume")}>Resume</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowMoveDialog(true)}>Move storage…</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => handleAction("remove")}>Remove</Button>
+              </div>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto" onClick={() => { setSelectedHashes(new Set()); setDetailHash(null); }}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
           <TorrentActions
             selectedCount={selectedHashes.size}
             onAction={handleAction}
@@ -439,6 +491,11 @@ export function DashboardPage() {
         onOpenChange={setShowNFODialog}
         hash={nfoHash}
         torrent={nfoHash ? torrents[nfoHash] ?? null : null}
+      />
+      <MoveStorageDialog
+        open={showMoveDialog}
+        onOpenChange={setShowMoveDialog}
+        hashes={Array.from(selectedHashes)}
       />
     </AppShell>
   );

@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TorrentStatus, Peer } from "@/api/types";
-import { useTorrentFiles, useTorrentPeers, useTorrentActions } from "@/api/hooks";
+import { useTorrentFiles, useTorrentPeers, useTorrentActions, useTorrentTrackers, useTorrentPieces } from "@/api/hooks";
+import { delugeClient } from "@/api/client";
 import { formatBytes, formatSpeed, formatDate, formatETA, formatRatio, cn, progressColor } from "@/lib/utils";
 import { store } from "@/lib/store";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -155,7 +157,7 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
             <PeersTab hash={hash} contentHeight={contentHeight} />
           </TabsContent>
           <TabsContent value="trackers">
-            <TrackersTab torrent={torrent} contentHeight={contentHeight} />
+            <TrackersTab hash={hash} contentHeight={contentHeight} />
           </TabsContent>
           <TabsContent value="options">
             <OptionsTab hash={hash} torrent={torrent} contentHeight={contentHeight} />
@@ -185,6 +187,60 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
   return (
     <div className="shrink-0 border-t bg-card flex flex-col" style={{ height: panelHeight }}>
       {panelContent}
+    </div>
+  );
+}
+
+const PIECE_BUCKETS = 200;
+
+function PieceMap({ hash }: { hash: string }) {
+  const { data } = useTorrentPieces(hash);
+  const pieces = data?.pieces;
+
+  if (!pieces || pieces.length === 0) return null;
+
+  // Bucket pieces into PIECE_BUCKETS visual columns
+  const bucketSize = Math.max(1, Math.ceil(pieces.length / PIECE_BUCKETS));
+  const buckets: number[] = [];
+  for (let i = 0; i < PIECE_BUCKETS; i++) {
+    const start = i * bucketSize;
+    const end = Math.min(start + bucketSize, pieces.length);
+    if (start >= pieces.length) break;
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += pieces[j];
+    buckets.push(sum / (end - start));
+  }
+
+  return (
+    <div className="mb-3">
+      <p className="text-xs text-muted-foreground mb-1">
+        Pieces ({pieces.length})
+      </p>
+      <div className="flex gap-px h-3 rounded overflow-hidden bg-muted">
+        {buckets.map((avg, i) => {
+          let cls = "bg-muted";
+          if (avg >= 3) cls = "bg-ul";
+          else if (avg >= 2) cls = "bg-dl";
+          else if (avg > 0) cls = "bg-state-warning";
+          return (
+            <div
+              key={i}
+              className={cn("flex-1 min-w-0", cls)}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-ul" /> Complete
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-dl" /> Downloading
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-sm bg-muted border border-border" /> Missing
+        </span>
+      </div>
     </div>
   );
 }
@@ -221,7 +277,7 @@ function GeneralTab({
 
   return (
     <ScrollArea style={{ height: contentHeight }} className="px-4 py-2">
-      <div className="mb-2">
+      <div className="mb-3">
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
             className={cn("h-full rounded-full transition-all", progressColor(torrent.progress, torrent.state))}
@@ -229,6 +285,7 @@ function GeneralTab({
           />
         </div>
       </div>
+      {torrent.progress < 100 && <PieceMap hash={hash} />}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-xs">
         {items.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-2">
@@ -434,20 +491,140 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
   );
 }
 
-function TrackersTab({ torrent, contentHeight }: { torrent: TorrentStatus; contentHeight: number }) {
+function TrackersTab({ hash, contentHeight }: { hash: string; contentHeight: number }) {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useTorrentTrackers(hash);
+  const [newUrl, setNewUrl] = useState("");
+  const [newTier, setNewTier] = useState("0");
+
+  const trackers = data?.trackers ?? [];
+
+  const setTrackersMutation = useMutation({
+    mutationFn: (list: { url: string; tier: number }[]) =>
+      delugeClient.setTorrentTrackers(hash, list),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrent", "trackers", hash] }),
+  });
+
+  const reannounce = useMutation({
+    mutationFn: () => delugeClient.forceReannounce([hash]),
+    onSuccess: () => {
+      toast.success("Reannouncing…");
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["torrent", "trackers", hash] }), 2000);
+    },
+  });
+
+  async function handleRemove(url: string) {
+    const updated = trackers.filter((t) => t.url !== url).map(({ url: u, tier }) => ({ url: u, tier }));
+    try {
+      await setTrackersMutation.mutateAsync(updated);
+      toast.success("Tracker removed");
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  async function handleAdd() {
+    if (!newUrl.trim()) return;
+    const tier = parseInt(newTier) || 0;
+    const updated = [
+      ...trackers.map(({ url, tier: t }) => ({ url, tier: t })),
+      { url: newUrl.trim(), tier },
+    ];
+    try {
+      await setTrackersMutation.mutateAsync(updated);
+      setNewUrl("");
+      setNewTier("0");
+      toast.success("Tracker added");
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  if (isLoading) return <div className="p-4 text-xs text-muted-foreground">Loading…</div>;
+
   return (
-    <ScrollArea style={{ height: contentHeight }} className="px-4 py-2">
-      <div className="text-xs space-y-2">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Tracker</span>
-          <span>{torrent.tracker_host || "—"}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Message</span>
-          <span>{torrent.message || "—"}</span>
-        </div>
+    <div style={{ height: contentHeight }} className="flex flex-col">
+      <div className="flex items-center justify-between px-4 py-1.5 border-b shrink-0">
+        <span className="text-xs text-muted-foreground">{trackers.length} tracker{trackers.length !== 1 ? "s" : ""}</span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 text-xs"
+          onClick={() => reannounce.mutate()}
+          disabled={reannounce.isPending}
+        >
+          Reannounce all
+        </Button>
       </div>
-    </ScrollArea>
+      <ScrollArea className="flex-1">
+        <table className="min-w-[500px] w-full text-xs">
+          <thead>
+            <tr className="border-b text-muted-foreground">
+              <th className="px-4 py-1.5 text-left font-medium">URL</th>
+              <th className="px-2 py-1.5 text-center font-medium w-12">Tier</th>
+              <th className="px-2 py-1.5 text-right font-medium w-16">Seeds</th>
+              <th className="px-2 py-1.5 text-right font-medium w-16">Peers</th>
+              <th className="px-2 py-1.5 text-left font-medium">Status</th>
+              <th className="px-2 py-1.5 w-16"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {trackers.map((tracker) => (
+              <tr key={tracker.url} className="border-b border-border/50">
+                <td className="px-4 py-1 truncate max-w-[220px] font-mono text-[10px]">{tracker.url}</td>
+                <td className="px-2 py-1 text-center text-muted-foreground">{tracker.tier}</td>
+                <td className="px-2 py-1 text-right">{tracker.seeds >= 0 ? tracker.seeds : "—"}</td>
+                <td className="px-2 py-1 text-right">{tracker.peers >= 0 ? tracker.peers : "—"}</td>
+                <td className="px-2 py-1 text-muted-foreground truncate max-w-[140px]">
+                  {tracker.updating ? (
+                    <span className="text-brand">Updating…</span>
+                  ) : tracker.message ? (
+                    tracker.message
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  <button
+                    onClick={() => handleRemove(tracker.url)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    title="Remove tracker"
+                  >
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {trackers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-4 text-center text-muted-foreground">No trackers</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </ScrollArea>
+      {/* Add tracker */}
+      <div className="flex gap-2 px-4 py-2 border-t shrink-0">
+        <Input
+          className="h-7 text-xs flex-1"
+          placeholder="https://tracker.example.com/announce"
+          value={newUrl}
+          onChange={(e) => setNewUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        />
+        <Input
+          className="h-7 text-xs w-16"
+          type="number"
+          placeholder="Tier"
+          value={newTier}
+          onChange={(e) => setNewTier(e.target.value)}
+          title="Tier"
+        />
+        <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={!newUrl.trim() || setTrackersMutation.isPending}>
+          Add
+        </Button>
+      </div>
+    </div>
   );
 }
 

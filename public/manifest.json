@@ -1,0 +1,17 @@
+{
+  "name": "Diluvium",
+  "short_name": "Diluvium",
+  "description": "A modern web UI for Deluge BitTorrent client",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Upload, Link, Magnet, FolderOpen } from "lucide-react";
+import { Upload, Link, Magnet, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface AddTorrentDialogProps {
@@ -19,6 +20,8 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
   const [magnetUri, setMagnetUri] = useState("");
   const [url, setUrl] = useState("");
   const [downloadLocation, setDownloadLocation] = useState(store.getDefaultDownloadLocation());
+  const [addPaused, setAddPaused] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const { addMagnetMutation, addUrlMutation, uploadFileMutation, addFileMutation } = useAddTorrent();
   const { configQuery } = useConfig();
@@ -29,9 +32,8 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
 
   function getOptions(): Record<string, unknown> {
     const opts: Record<string, unknown> = {};
-    if (effectivePath) {
-      opts.download_location = effectivePath;
-    }
+    if (effectivePath) opts.download_location = effectivePath;
+    if (addPaused) opts.add_paused = true;
     return opts;
   }
 
@@ -130,29 +132,6 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
           <DialogTitle>Add Torrent</DialogTitle>
         </DialogHeader>
 
-        {/* Download location picker */}
-        <div className="space-y-1.5">
-          <Label htmlFor="dl-location" className="text-xs flex items-center gap-1.5">
-            <FolderOpen className="h-3.5 w-3.5" />
-            Download Location
-          </Label>
-          <div className="flex gap-1.5">
-            <Input
-              id="dl-location"
-              className="h-8 text-xs"
-              placeholder={defaultPath || "/path/on/server"}
-              value={downloadLocation}
-              onChange={(e) => setDownloadLocation(e.target.value)}
-            />
-            <Button variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={handleSaveDefaultLocation}>
-              Save
-            </Button>
-          </div>
-          {defaultPath && !downloadLocation && (
-            <p className="text-[10px] text-muted-foreground">Default: {defaultPath}</p>
-          )}
-        </div>
-
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="w-full">
             <TabsTrigger value="file" className="flex-1">
@@ -240,6 +219,48 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Collapsible options */}
+        <div className="border rounded-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowOptions((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/50 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <FolderOpen className="h-3.5 w-3.5" />
+              Options
+            </span>
+            {showOptions ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          {showOptions && (
+            <div className="px-3 pb-3 pt-1 space-y-3 border-t">
+              <div className="space-y-1.5">
+                <Label htmlFor="dl-location" className="text-xs">Download location</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    id="dl-location"
+                    className="h-8 text-xs"
+                    placeholder={defaultPath || "/path/on/server"}
+                    value={downloadLocation}
+                    onChange={(e) => setDownloadLocation(e.target.value)}
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={handleSaveDefaultLocation}>
+                    Save default
+                  </Button>
+                </div>
+                {defaultPath && !downloadLocation && (
+                  <p className="text-[10px] text-muted-foreground">Default: {defaultPath}</p>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                <Checkbox checked={addPaused} onCheckedChange={(v) => setAddPaused(v === true)} className="h-3.5 w-3.5" />
+                Add torrent in paused state
+              </label>
+
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

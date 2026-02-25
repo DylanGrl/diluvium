@@ -13,6 +13,7 @@ import { NetworkTab } from "./network-tab";
 import { EncryptionTab } from "./encryption-tab";
 import { ProxyTab } from "./proxy-tab";
 import { CacheTab } from "./cache-tab";
+import { PluginsTab } from "./plugins-tab";
 
 const THEMES: { id: ThemeMode; label: string; preview: string }[] = [
   { id: "light", label: "Light", preview: "bg-white border-zinc-200" },
@@ -33,6 +34,7 @@ const TABS = [
   { id: "encryption", label: "Encryption" },
   { id: "proxy", label: "Proxy" },
   { id: "cache", label: "Cache" },
+  { id: "plugins", label: "Plugins" },
   { id: "about", label: "About" },
 ] as const;
 
@@ -170,6 +172,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             {tab === "encryption" && <EncryptionTab />}
             {tab === "proxy" && <ProxyTab />}
             {tab === "cache" && <CacheTab />}
+            {tab === "plugins" && <PluginsTab />}
 
             {tab === "about" && (
               <div className="space-y-2 text-sm">

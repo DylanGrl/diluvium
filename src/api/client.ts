@@ -273,6 +273,58 @@ class DelugeClient {
   async setConfig(config: Record<string, unknown>): Promise<void> {
     await this.call("core.set_config", [config]);
   }
+
+  // Plugins — use web.get_plugins for reliable enabled+available in one call
+  async getPlugins(): Promise<{ enabled_plugins: string[]; available_plugins: string[] }> {
+    return this.call("web.get_plugins");
+  }
+
+  async enablePlugin(name: string): Promise<void> {
+    await this.call("core.enable_plugin", [name]);
+  }
+
+  async disablePlugin(name: string): Promise<void> {
+    await this.call("core.disable_plugin", [name]);
+  }
+
+  // Label plugin
+  async getLabels(): Promise<string[]> {
+    return this.call<string[]>("label.get_labels");
+  }
+
+  async addLabel(name: string): Promise<void> {
+    await this.call("label.add", [name]);
+  }
+
+  async removeLabel(name: string): Promise<void> {
+    await this.call("label.remove", [name]);
+  }
+
+  async setTorrentLabel(hash: string, label: string): Promise<void> {
+    await this.call("label.set_torrent", [hash, label]);
+  }
+
+  // Tracker management
+  async setTorrentTrackers(
+    hash: string,
+    trackers: { url: string; tier: number }[],
+  ): Promise<void> {
+    await this.call("core.set_torrent_trackers", [hash, trackers]);
+  }
+
+  async forceReannounce(hashes: string[]): Promise<void> {
+    await this.call("core.force_reannounce", [hashes]);
+  }
+
+  // Piece map
+  async getTorrentPieces(hash: string): Promise<{ pieces: number[] }> {
+    return this.call("core.get_torrent_status", [hash, ["pieces"]]) as Promise<{ pieces: number[] }>;
+  }
+
+  // Full tracker list for a torrent
+  async getTorrentTrackers(hash: string): Promise<{ trackers: { url: string; tier: number; message: string; seeds: number; peers: number; next_announce: number; fail_limit: number; fails: number; verified: boolean; updating: boolean; start_send_peers: boolean }[] }> {
+    return this.call("core.get_torrent_status", [hash, ["trackers"]]) as Promise<{ trackers: { url: string; tier: number; message: string; seeds: number; peers: number; next_announce: number; fail_limit: number; fails: number; verified: boolean; updating: boolean; start_send_peers: boolean }[] }>;
+  }
 }
 
 export const delugeClient = new DelugeClient();

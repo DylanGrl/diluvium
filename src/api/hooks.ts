@@ -393,6 +393,108 @@ export function useCreateTorrent() {
 }
 
 // ---------------------------------------------------------------------------
+// Plugins
+// ---------------------------------------------------------------------------
+
+export function usePlugins(enabled = true) {
+  const queryClient = useQueryClient();
+
+  // Use web.get_plugins for reliable single call that returns both lists
+  const pluginsQuery = useQuery({
+    queryKey: ["plugins"],
+    queryFn: () => delugeClient.getPlugins(),
+    enabled,
+    staleTime: 30_000,
+  });
+
+  const enabledPlugins = pluginsQuery.data?.enabled_plugins ?? [];
+  const availablePlugins = pluginsQuery.data?.available_plugins ?? [];
+
+  const enableMutation = useMutation({
+    mutationFn: (name: string) => delugeClient.enablePlugin(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plugins"] });
+    },
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: (name: string) => delugeClient.disablePlugin(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plugins"] });
+    },
+  });
+
+  return { pluginsQuery, enabledPlugins, availablePlugins, enableMutation, disableMutation };
+}
+
+// ---------------------------------------------------------------------------
+// Labels (requires Label plugin) — TODO: re-enable once verified working
+// ---------------------------------------------------------------------------
+
+export function useLabels(enabled = true) {
+  const queryClient = useQueryClient();
+
+  const labelsQuery = useQuery({
+    queryKey: ["labels"],
+    queryFn: () => delugeClient.getLabels(),
+    enabled,
+    staleTime: 10_000,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (name: string) => delugeClient.addLabel(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["labels"] });
+      queryClient.invalidateQueries({ queryKey: ["updateUI"] });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (name: string) => delugeClient.removeLabel(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["labels"] });
+      queryClient.invalidateQueries({ queryKey: ["updateUI"] });
+    },
+  });
+
+  const setTorrentLabelMutation = useMutation({
+    mutationFn: ({ hash, label }: { hash: string; label: string }) =>
+      delugeClient.setTorrentLabel(hash, label),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["updateUI"] });
+    },
+  });
+
+  return { labelsQuery, addMutation, removeMutation, setTorrentLabelMutation };
+}
+
+// ---------------------------------------------------------------------------
+// Torrent trackers
+// ---------------------------------------------------------------------------
+
+export function useTorrentTrackers(hash: string | null) {
+  return useQuery<{ trackers: import("./types").Tracker[] }>({
+    queryKey: ["torrent", "trackers", hash],
+    queryFn: () => delugeClient.getTorrentTrackers(hash!) as Promise<{ trackers: import("./types").Tracker[] }>,
+    enabled: !!hash,
+    refetchInterval: 10_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Piece map
+// ---------------------------------------------------------------------------
+
+export function useTorrentPieces(hash: string | null) {
+  return useQuery<{ pieces: number[] }>({
+    queryKey: ["torrent", "pieces", hash],
+    queryFn: () => delugeClient.getTorrentPieces(hash!),
+    enabled: !!hash,
+    refetchInterval: 3_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Global config
 // ---------------------------------------------------------------------------
 

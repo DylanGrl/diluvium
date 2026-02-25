@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
 import {
@@ -10,6 +10,8 @@ import {
   torrentStateColor,
   progressColor,
 } from "@/lib/utils";
+import { store } from "@/lib/store";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,6 +22,27 @@ import {
 import { MoreVertical, Plus, Search, FilterX } from "lucide-react";
 
 const CARD_HEIGHT_PX = 88;
+
+const SORT_OPTIONS = [
+  { key: "name", label: "Name" },
+  { key: "ratio", label: "Ratio" },
+  { key: "total_size", label: "Size" },
+  { key: "state", label: "State" },
+  { key: "time_added", label: "Added" },
+] as const;
+
+type SortKey = typeof SORT_OPTIONS[number]["key"];
+
+function sortTorrents(list: (TorrentStatus & { hash: string })[], col: SortKey, dir: "asc" | "desc") {
+  return [...list].sort((a, b) => {
+    const va = a[col];
+    const vb = b[col];
+    const cmp = typeof va === "string" && typeof vb === "string"
+      ? va.localeCompare(vb)
+      : (va as number) < (vb as number) ? -1 : (va as number) > (vb as number) ? 1 : 0;
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
 
 interface TorrentCardListProps {
   torrents: (TorrentStatus & { hash: string })[];
@@ -41,13 +64,38 @@ export function TorrentCardList({
   onClearFilters,
 }: TorrentCardListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [sortCol, setSortCol] = useState<SortKey>(() => store.getMobileSortColumn() as SortKey);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => store.getMobileSortDir());
+
+  function handleSort(key: SortKey) {
+    if (key === sortCol) {
+      const next = sortDir === "asc" ? "desc" : "asc";
+      setSortDir(next);
+      store.setMobileSortDir(next);
+    } else {
+      setSortCol(key);
+      setSortDir("asc");
+      store.setMobileSortColumn(key);
+      store.setMobileSortDir("asc");
+    }
+  }
+
+  const sorted = useMemo(() => sortTorrents(torrents, sortCol, sortDir), [torrents, sortCol, sortDir]);
 
   const virtualizer = useVirtualizer({
-    count: torrents.length,
+    count: sorted.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => CARD_HEIGHT_PX,
     overscan: 5,
   });
+
+  // Scroll to selected card when selection changes externally (arrow key nav)
+  useEffect(() => {
+    if (selectedHashes.size !== 1) return;
+    const hash = [...selectedHashes][0];
+    const idx = sorted.findIndex((t) => t.hash === hash);
+    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
+  }, [selectedHashes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
@@ -85,13 +133,37 @@ export function TorrentCardList({
   }
 
   return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Sort bar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b overflow-x-auto shrink-0">
+        <span className="text-xs text-muted-foreground shrink-0 mr-1">Sort:</span>
+        {SORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => handleSort(opt.key)}
+            className={cn(
+              "flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
+              sortCol === opt.key
+                ? "border-ring bg-accent text-accent-foreground font-medium"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {opt.label}
+            {sortCol === opt.key && (
+              sortDir === "asc"
+                ? <ArrowUp className="h-2.5 w-2.5" />
+                : <ArrowDown className="h-2.5 w-2.5" />
+            )}
+          </button>
+        ))}
+      </div>
     <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-2">
       <div
         className="relative w-full"
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
-          const torrent = torrents[virtualRow.index];
+          const torrent = sorted[virtualRow.index];
           const selected = selectedHashes.has(torrent.hash);
           return (
             <div
@@ -112,6 +184,7 @@ export function TorrentCardList({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }
@@ -205,6 +278,7 @@ function TorrentCard({
           <DropdownMenuItem onClick={() => onAction("copy_name")}>Copy Name</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onAction("copy_hash")}>Copy Hash</DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => onAction("move_storage")}>Move storage…</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onAction("generate_nfo")}>Generate NFO</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

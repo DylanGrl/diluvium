@@ -77,4 +77,10 @@ export const store = {
 
   getNotificationsEnabled: () => getItem<boolean>("notifications_enabled", false),
   setNotificationsEnabled: (enabled: boolean) => setItem("notifications_enabled", enabled),
+
+  getMobileSortColumn: () => getItem<string>("mobile_sort_col", "name"),
+  setMobileSortColumn: (col: string) => setItem("mobile_sort_col", col),
+
+  getMobileSortDir: () => getItem<"asc" | "desc">("mobile_sort_dir", "asc"),
+  setMobileSortDir: (dir: "asc" | "desc") => setItem("mobile_sort_dir", dir),
 };

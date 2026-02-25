@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
 import { cn, formatBytes, formatSpeed, formatETA, formatRatio, ratioColor, torrentStateColor, progressColor } from "@/lib/utils";
@@ -125,6 +125,14 @@ export function TorrentTable({
   });
 
   const virtualItems = virtualizer.getVirtualItems();
+
+  // Scroll to selected row when selection is driven externally (e.g. arrow key nav)
+  useEffect(() => {
+    if (selectedHashes.size !== 1) return;
+    const hash = [...selectedHashes][0];
+    const idx = sorted.findIndex((t) => t.hash === hash);
+    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
+  }, [selectedHashes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden min-h-0">
@@ -302,6 +310,7 @@ function TorrentContextMenuContent({
       <ContextMenuItem onClick={() => onAction("copy_name")}>Copy Name</ContextMenuItem>
       <ContextMenuItem onClick={() => onAction("copy_hash")}>Copy Hash</ContextMenuItem>
       <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => onAction("move_storage")}>Move storage…</ContextMenuItem>
       <ContextMenuItem onClick={() => onAction("generate_nfo")}>Generate NFO</ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem destructive onClick={() => onAction("remove")}>
