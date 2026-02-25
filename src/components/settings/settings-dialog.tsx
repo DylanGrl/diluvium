@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
-import { useAuth, useConfig } from "@/api/hooks";
+import { useState } from "react";
+import { useAuth } from "@/api/hooks";
 import { store, applyTheme, type ThemeMode } from "@/lib/store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Bell, BellOff, LogOut } from "lucide-react";
+import { DownloadsTab } from "./downloads-tab";
+import { SpeedTab } from "./speed-tab";
+import { QueueTab } from "./queue-tab";
+import { NetworkTab } from "./network-tab";
+import { EncryptionTab } from "./encryption-tab";
+import { ProxyTab } from "./proxy-tab";
+import { CacheTab } from "./cache-tab";
 
 const THEMES: { id: ThemeMode; label: string; preview: string }[] = [
   { id: "light", label: "Light", preview: "bg-white border-zinc-200" },
@@ -19,17 +24,29 @@ const THEMES: { id: ThemeMode; label: string; preview: string }[] = [
   { id: "nord-light", label: "Nord Light", preview: "bg-[#eceff4] border-[#5e81ac]" },
 ];
 
+const TABS = [
+  { id: "general", label: "General" },
+  { id: "downloads", label: "Downloads" },
+  { id: "speed", label: "Speed" },
+  { id: "queue", label: "Queue" },
+  { id: "network", label: "Network" },
+  { id: "encryption", label: "Encryption" },
+  { id: "proxy", label: "Proxy" },
+  { id: "cache", label: "Cache" },
+  { id: "about", label: "About" },
+] as const;
+
+type TabId = typeof TABS[number]["id"];
+
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [tab, setTab] = useState("general");
+  const [tab, setTab] = useState<TabId>("general");
   const [theme, setTheme] = useState<ThemeMode>(store.getTheme());
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    store.getNotificationsEnabled(),
-  );
+  const [notificationsEnabled, setNotificationsEnabled] = useState(store.getNotificationsEnabled());
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "denied",
   );
@@ -68,172 +85,114 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0">
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="speed">Speed Limits</TabsTrigger>
-            <TabsTrigger value="about">About</TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="general">
-            <div className="mt-3 space-y-4">
-              <div>
-                <Label>Theme</Label>
-                <p className="text-xs text-muted-foreground mb-2">Choose your preferred appearance</p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {THEMES.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setThemeMode(t.id)}
-                      className={`flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs transition-colors ${
-                        theme === t.id
-                          ? "ring-2 ring-ring bg-accent"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      <div className={`h-6 w-10 rounded border-2 ${t.preview}`} />
-                      <span className="text-[10px] leading-tight">{t.label}</span>
-                    </button>
-                  ))}
+        <div className="flex flex-1 min-h-0">
+          {/* Sidebar nav */}
+          <nav className="w-36 shrink-0 border-r py-3 flex flex-col gap-0.5 overflow-y-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "w-full text-left px-4 py-1.5 text-sm rounded-none transition-colors",
+                  tab === t.id
+                    ? "bg-accent text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {tab === "general" && (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-sm font-medium mb-1">Theme</p>
+                  <p className="text-xs text-muted-foreground mb-3">Choose your preferred appearance</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setThemeMode(t.id)}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 rounded-lg border border-border p-2 text-xs transition-colors",
+                          theme === t.id ? "ring-2 ring-ring bg-accent" : "hover:bg-muted"
+                        )}
+                      >
+                        <div className={`h-6 w-10 rounded border-2 ${t.preview}`} />
+                        <span className="text-[10px] leading-tight">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-2">
+                  <p className="text-sm font-medium">Notifications</p>
+                  <p className="text-xs text-muted-foreground">
+                    Get a desktop notification when a torrent finishes downloading.
+                  </p>
+                  {notifPermission === "granted" ? (
+                    <Button variant="outline" size="sm" onClick={() => toggleNotifications(!notificationsEnabled)}>
+                      {notificationsEnabled ? (
+                        <><Bell className="mr-1.5 h-3.5 w-3.5" />Enabled — click to disable</>
+                      ) : (
+                        <><BellOff className="mr-1.5 h-3.5 w-3.5" />Disabled — click to enable</>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={requestNotificationPermission} disabled={notifPermission === "denied"}>
+                      <Bell className="mr-1.5 h-3.5 w-3.5" />
+                      {notifPermission === "denied" ? "Blocked by browser — allow in browser settings" : "Allow notifications"}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="border-t pt-4">
+                  <Button variant="destructive" size="sm" onClick={handleLogout}>
+                    <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                    Logout
+                  </Button>
                 </div>
               </div>
+            )}
 
-              <div className="border-t pt-4 space-y-2">
-                <Label>Notifications</Label>
-                <p className="text-xs text-muted-foreground">
-                  Get a desktop notification when a torrent finishes downloading.
-                </p>
-                {notifPermission === "granted" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toggleNotifications(!notificationsEnabled)}
-                  >
-                    {notificationsEnabled ? (
-                      <>
-                        <Bell className="mr-1.5 h-3.5 w-3.5" />
-                        Enabled — click to disable
-                      </>
-                    ) : (
-                      <>
-                        <BellOff className="mr-1.5 h-3.5 w-3.5" />
-                        Disabled — click to enable
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={requestNotificationPermission}
-                    disabled={notifPermission === "denied"}
-                  >
-                    <Bell className="mr-1.5 h-3.5 w-3.5" />
-                    {notifPermission === "denied"
-                      ? "Blocked by browser — allow in browser settings"
-                      : "Allow notifications"}
-                  </Button>
-                )}
+            {tab === "downloads" && <DownloadsTab />}
+            {tab === "speed" && <SpeedTab />}
+            {tab === "queue" && <QueueTab />}
+            {tab === "network" && <NetworkTab />}
+            {tab === "encryption" && <EncryptionTab />}
+            {tab === "proxy" && <ProxyTab />}
+            {tab === "cache" && <CacheTab />}
+
+            {tab === "about" && (
+              <div className="space-y-2 text-sm">
+                <p className="text-lg font-semibold">Diluvium</p>
+                <p className="text-muted-foreground">A modern web UI for Deluge BitTorrent client.</p>
+                <p className="text-xs text-muted-foreground">Version 0.2.0</p>
+                <div className="pt-2 text-xs text-muted-foreground">
+                  <p>Keyboard shortcuts:</p>
+                  <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                    <li><kbd className="rounded bg-muted px-1">A</kbd> — Add torrent</li>
+                    <li><kbd className="rounded bg-muted px-1">N</kbd> — Generate NFO</li>
+                    <li><kbd className="rounded bg-muted px-1">Space</kbd> — Pause/Resume</li>
+                    <li><kbd className="rounded bg-muted px-1">Delete</kbd> — Remove</li>
+                    <li><kbd className="rounded bg-muted px-1">Esc</kbd> — Deselect</li>
+                    <li><kbd className="rounded bg-muted px-1">Ctrl+A</kbd> — Select All</li>
+                    <li><kbd className="rounded bg-muted px-1">Ctrl+F</kbd> — Search</li>
+                  </ul>
+                </div>
               </div>
-
-              <div className="border-t pt-4">
-                <Button variant="destructive" size="sm" onClick={handleLogout}>
-                  <LogOut className="mr-1.5 h-3.5 w-3.5" />
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="speed">
-            {tab === "speed" && <SpeedLimitsTab />}
-          </TabsContent>
-
-          <TabsContent value="about">
-            <div className="mt-3 space-y-2 text-sm">
-              <p className="text-lg font-semibold">Diluvium</p>
-              <p className="text-muted-foreground">
-                A modern web UI for Deluge BitTorrent client.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Version 0.1.0
-              </p>
-              <div className="pt-2 text-xs text-muted-foreground">
-                <p>Keyboard shortcuts:</p>
-                <ul className="mt-1 space-y-0.5 list-disc list-inside">
-                  <li><kbd className="rounded bg-muted px-1">A</kbd> — Add torrent</li>
-                  <li><kbd className="rounded bg-muted px-1">N</kbd> — Generate NFO</li>
-                  <li><kbd className="rounded bg-muted px-1">Space</kbd> — Pause/Resume</li>
-                  <li><kbd className="rounded bg-muted px-1">Delete</kbd> — Remove</li>
-                  <li><kbd className="rounded bg-muted px-1">Esc</kbd> — Deselect</li>
-                  <li><kbd className="rounded bg-muted px-1">Ctrl+A</kbd> — Select All</li>
-                  <li><kbd className="rounded bg-muted px-1">Ctrl+F</kbd> — Search</li>
-                </ul>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SpeedLimitsTab() {
-  const { configQuery, setConfigMutation } = useConfig();
-  const [maxDownload, setMaxDownload] = useState("");
-  const [maxUpload, setMaxUpload] = useState("");
-  const [maxConnections, setMaxConnections] = useState("");
-
-  useEffect(() => {
-    if (configQuery.data) {
-      const c = configQuery.data;
-      setMaxDownload(String(c.max_download_speed ?? -1));
-      setMaxUpload(String(c.max_upload_speed ?? -1));
-      setMaxConnections(String(c.max_connections_global ?? -1));
-    }
-  }, [configQuery.data]);
-
-  async function handleSaveConfig() {
-    const dl = parseFloat(maxDownload);
-    const ul = parseFloat(maxUpload);
-    const conn = parseInt(maxConnections);
-    if (isNaN(dl) || isNaN(ul) || isNaN(conn)) {
-      toast.error("Please enter valid numbers (-1 for unlimited)");
-      return;
-    }
-    try {
-      await setConfigMutation.mutateAsync({
-        max_download_speed: dl,
-        max_upload_speed: ul,
-        max_connections_global: conn,
-      });
-      toast.success("Settings saved");
-    } catch (err) {
-      toast.error(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-  }
-
-  return (
-    <div className="mt-3 space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="max-dl">Max Download Speed (KiB/s, -1 = unlimited)</Label>
-        <Input id="max-dl" type="number" step="any" value={maxDownload} onChange={(e) => setMaxDownload(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="max-ul">Max Upload Speed (KiB/s, -1 = unlimited)</Label>
-        <Input id="max-ul" type="number" step="any" value={maxUpload} onChange={(e) => setMaxUpload(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="max-conn">Max Connections (-1 = unlimited)</Label>
-        <Input id="max-conn" type="number" value={maxConnections} onChange={(e) => setMaxConnections(e.target.value)} />
-      </div>
-      <Button onClick={handleSaveConfig} disabled={setConfigMutation.isPending}>
-        {setConfigMutation.isPending ? "Saving..." : "Save"}
-      </Button>
-    </div>
   );
 }
