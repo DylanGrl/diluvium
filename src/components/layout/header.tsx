@@ -52,6 +52,10 @@ function NetworkInfoButton({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label="Network stats"
         className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm hover:bg-accent transition-colors"
         title="Network stats"
       >
@@ -80,7 +84,7 @@ function NetworkInfoButton({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-56 max-w-[calc(100vw-1rem)] rounded-md border bg-popover p-3 shadow-lg space-y-1.5 text-xs">
+          <div role="dialog" aria-label="Network stats" className="absolute right-0 top-full z-50 mt-1 w-56 max-w-[calc(100vw-1rem)] rounded-md border bg-popover p-3 shadow-lg space-y-1.5 text-xs">
             {/* Connection status */}
             <div className="flex items-center justify-between gap-6">
               <span className="text-muted-foreground">Status</span>

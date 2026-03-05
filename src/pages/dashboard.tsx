@@ -21,7 +21,7 @@ import { useTorrentNotifications } from "@/hooks/use-torrent-notifications";
 import { useSessionStats } from "@/hooks/use-session-stats";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
-import { AlertCircle, RefreshCw, Upload, X } from "lucide-react";
+import { AlertCircle, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function DashboardPage() {
@@ -411,23 +411,10 @@ export function DashboardPage() {
           torrents={torrentList}
         />
         <div className="flex flex-1 flex-col overflow-hidden">
-          {selectedHashes.size > 1 && (
-            <div className="flex shrink-0 items-center gap-2 border-b bg-accent/30 px-3 py-1.5 text-sm flex-wrap">
-              <span className="text-muted-foreground font-medium shrink-0">{selectedHashes.size} selected</span>
-              <div className="flex items-center gap-1 flex-wrap">
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleAction("pause")}>Pause</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleAction("resume")}>Resume</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowMoveDialog(true)}>Move storage…</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => handleAction("remove")}>Remove</Button>
-              </div>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto" onClick={() => { setSelectedHashes(new Set()); setDetailHash(null); }}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
           <TorrentActions
             selectedCount={selectedHashes.size}
             onAction={handleAction}
+            onDeselect={() => { setSelectedHashes(new Set()); setDetailHash(null); }}
           />
           {isMobile ? (
             <TorrentCardList

@@ -9,19 +9,22 @@ import {
   ChevronsUp,
   ChevronsDown,
   FileText,
+  FolderOpen,
+  X,
 } from "lucide-react";
 
 interface TorrentActionsProps {
   selectedCount: number;
   onAction: (action: string) => void;
+  onDeselect: () => void;
 }
 
-export function TorrentActions({ selectedCount, onAction }: TorrentActionsProps) {
+export function TorrentActions({ selectedCount, onAction, onDeselect }: TorrentActionsProps) {
   if (selectedCount === 0) return null;
 
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/30 px-3 py-2 sm:py-1.5">
-      <span className="mr-2 text-xs text-muted-foreground">
+      <span className="mr-2 shrink-0 text-xs text-muted-foreground">
         {selectedCount} selected
       </span>
       <Button variant="ghost" size="sm" onClick={() => onAction("resume")} title="Resume">
@@ -32,14 +35,17 @@ export function TorrentActions({ selectedCount, onAction }: TorrentActionsProps)
         <Pause className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
         <span className="sm:hidden ml-1 text-xs">Pause</span>
       </Button>
-      <Button variant="ghost" size="sm" onClick={() => onAction("remove")} title="Remove">
+      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onAction("remove")} title="Remove">
         <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
         <span className="sm:hidden ml-1 text-xs">Remove</span>
       </Button>
       <Button variant="ghost" size="sm" onClick={() => onAction("recheck")} title="Recheck">
         <RefreshCw className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
       </Button>
-      <div className="mx-1 h-4 w-px bg-border" />
+      <Button variant="ghost" size="sm" onClick={() => onAction("move_storage")} title="Move storage…">
+        <FolderOpen className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+      </Button>
+      <div className="mx-1 h-4 w-px bg-border shrink-0" />
       <Button variant="ghost" size="sm" onClick={() => onAction("queue_top")} title="Queue Top">
         <ChevronsUp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
       </Button>
@@ -54,12 +60,15 @@ export function TorrentActions({ selectedCount, onAction }: TorrentActionsProps)
       </Button>
       {selectedCount === 1 && (
         <>
-          <div className="mx-1 h-4 w-px bg-border" />
+          <div className="mx-1 h-4 w-px bg-border shrink-0" />
           <Button variant="ghost" size="sm" onClick={() => onAction("generate_nfo")} title="Generate NFO / Create Torrent">
             <FileText className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </Button>
         </>
       )}
+      <Button variant="ghost" size="sm" className="ml-auto shrink-0 h-7 w-7 p-0" onClick={onDeselect} title="Clear selection (Esc)">
+        <X className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

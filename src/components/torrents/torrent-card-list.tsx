@@ -134,28 +134,42 @@ export function TorrentCardList({
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* Sort bar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 border-b overflow-x-auto shrink-0">
-        <span className="text-xs text-muted-foreground shrink-0 mr-1">Sort:</span>
-        {SORT_OPTIONS.map((opt) => (
+      {/* Sort bar + optional filter chip */}
+      <div className="flex items-center border-b shrink-0">
+        <div className="relative flex flex-1 items-center gap-1 px-3 py-1.5 overflow-x-auto">
+          <span className="text-xs text-muted-foreground shrink-0 mr-1">Sort:</span>
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => handleSort(opt.key)}
+              className={cn(
+                "flex items-center gap-0.5 text-xs px-2.5 py-1 rounded-full border transition-colors shrink-0 min-h-[30px]",
+                sortCol === opt.key
+                  ? "border-ring bg-accent text-accent-foreground font-medium"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {opt.label}
+              {sortCol === opt.key && (
+                sortDir === "asc"
+                  ? <ArrowUp className="h-2.5 w-2.5" />
+                  : <ArrowDown className="h-2.5 w-2.5" />
+              )}
+            </button>
+          ))}
+          {/* Right-edge fade to hint horizontal scroll */}
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background" />
+        </div>
+        {hasActiveFilters && (
           <button
-            key={opt.key}
-            onClick={() => handleSort(opt.key)}
-            className={cn(
-              "flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0",
-              sortCol === opt.key
-                ? "border-ring bg-accent text-accent-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
+            onClick={onClearFilters}
+            className="flex shrink-0 items-center gap-1 border-l px-2.5 py-1.5 text-xs text-dl hover:bg-muted/50 transition-colors"
+            title="Clear filters"
           >
-            {opt.label}
-            {sortCol === opt.key && (
-              sortDir === "asc"
-                ? <ArrowUp className="h-2.5 w-2.5" />
-                : <ArrowDown className="h-2.5 w-2.5" />
-            )}
+            <FilterX className="h-3.5 w-3.5" />
+            <span>Filtered</span>
           </button>
-        ))}
+        )}
       </div>
     <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-2">
       <div
