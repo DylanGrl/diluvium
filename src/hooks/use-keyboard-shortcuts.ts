@@ -11,6 +11,7 @@ interface KeyboardShortcutActions {
   onMagnetPaste: () => void;
   onNavigateUp: () => void;
   onNavigateDown: () => void;
+  onShowHelp: () => void;
   hasSelection: boolean;
 }
 
@@ -26,6 +27,7 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
     onMagnetPaste,
     onNavigateUp,
     onNavigateDown,
+    onShowHelp,
     hasSelection,
   } = actions;
 
@@ -83,6 +85,10 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
           e.preventDefault();
           onNavigateDown();
           break;
+        case "?":
+          e.preventDefault();
+          onShowHelp();
+          break;
       }
     }
 
@@ -116,6 +122,7 @@ export function useKeyboardShortcuts(actions: KeyboardShortcutActions) {
     onMagnetPaste,
     onNavigateUp,
     onNavigateDown,
+    onShowHelp,
     hasSelection,
   ]);
 }

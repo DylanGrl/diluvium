@@ -11,15 +11,19 @@ interface ContextMenuState {
 interface ContextMenuProps {
   children: React.ReactNode;
   content: React.ReactNode;
+  enableLongPress?: boolean;
 }
 
-function ContextMenu({ children, content }: ContextMenuProps) {
+function ContextMenu({ children, content, enableLongPress }: ContextMenuProps) {
   const [state, setState] = React.useState<ContextMenuState>({
     x: 0,
     y: 0,
     open: false,
   });
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressActive = React.useRef(false);
+  const touchMoved = React.useRef(false);
 
   const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -55,25 +59,61 @@ function ContextMenu({ children, content }: ContextMenuProps) {
     };
   }, [state.open]);
 
-  // Adjust position to keep menu on screen
-  const adjustedPosition = React.useMemo(() => {
-    if (!state.open) return { top: 0, left: 0 };
-    const menuWidth = 200;
-    const menuHeight = 300;
-    const x = state.x + menuWidth > window.innerWidth ? state.x - menuWidth : state.x;
-    const y = state.y + menuHeight > window.innerHeight ? state.y - menuHeight : state.y;
-    return { top: Math.max(0, y), left: Math.max(0, x) };
+  const handleTouchStart = React.useCallback((e: React.TouchEvent) => {
+    if (!enableLongPress) return;
+    touchMoved.current = false;
+    const touch = e.touches[0];
+    longPressTimer.current = setTimeout(() => {
+      if (touchMoved.current) return;
+      longPressActive.current = true;
+      setState({ x: touch.clientX, y: touch.clientY, open: true });
+    }, 500);
+  }, [enableLongPress]);
+
+  const handleTouchMove = React.useCallback(() => {
+    touchMoved.current = true;
+    clearTimeout(longPressTimer.current);
+  }, []);
+
+  const handleTouchEnd = React.useCallback(() => {
+    clearTimeout(longPressTimer.current);
+  }, []);
+
+  // Suppress click that fires after long-press touchend
+  const handleClick = React.useCallback((e: React.MouseEvent) => {
+    if (longPressActive.current) {
+      e.stopPropagation();
+      longPressActive.current = false;
+    }
+  }, []);
+
+  // Adjust position after render using actual menu dimensions
+  React.useLayoutEffect(() => {
+    if (!state.open || !menuRef.current) return;
+    const el = menuRef.current;
+    const { width, height } = el.getBoundingClientRect();
+    const x = state.x + width > window.innerWidth ? state.x - width : state.x;
+    const y = state.y + height > window.innerHeight ? state.y - height : state.y;
+    el.style.left = `${Math.max(0, x)}px`;
+    el.style.top = `${Math.max(0, y)}px`;
+    el.style.visibility = "visible";
   }, [state]);
 
   return (
     <>
-      <div onContextMenu={handleContextMenu}>{children}</div>
+      <div
+        onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleClick}
+      >{children}</div>
       {state.open &&
         createPortal(
           <div
             ref={menuRef}
             className="fixed z-50 min-w-[180px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
-            style={{ top: adjustedPosition.top, left: adjustedPosition.left }}
+            style={{ top: state.y, left: state.x, visibility: "hidden" }}
           >
             <ContextMenuInternalContext.Provider
               value={{ close: () => setState((s) => ({ ...s, open: false })) }}

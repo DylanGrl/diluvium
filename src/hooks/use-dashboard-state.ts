@@ -1,12 +1,23 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { FilterState } from "@/api/types";
+import { store } from "@/lib/store";
+
+export type DateFilter = "all" | "today" | "week" | "month";
 
 export function useDashboardState() {
-  // Filter state
-  const [stateFilter, setStateFilter] = useState<FilterState>("All");
-  const [trackerFilter, setTrackerFilter] = useState<string>("All");
-  const [labelFilter, setLabelFilter] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const saved = store.getFilterState();
+
+  // Filter state — initialised from persisted store
+  const [stateFilter, setStateFilter] = useState<FilterState>(saved.stateFilter as FilterState);
+  const [trackerFilter, setTrackerFilter] = useState<string>(saved.trackerFilter);
+  const [labelFilter, setLabelFilter] = useState<string>(saved.labelFilter);
+  const [searchQuery, setSearchQuery] = useState(saved.searchQuery);
+  const [dateFilter, setDateFilter] = useState<DateFilter>(saved.dateFilter as DateFilter);
+
+  // Persist filter state whenever any filter changes
+  useEffect(() => {
+    store.setFilterState({ stateFilter, trackerFilter, labelFilter, dateFilter, searchQuery });
+  }, [stateFilter, trackerFilter, labelFilter, dateFilter, searchQuery]);
 
   // Dialog visibility
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -26,42 +37,32 @@ export function useDashboardState() {
     stateFilter !== "All" ||
     trackerFilter !== "All" ||
     labelFilter !== "All" ||
-    searchQuery !== "";
+    searchQuery !== "" ||
+    dateFilter !== "all";
 
   const clearFilters = useCallback(() => {
     setStateFilter("All");
     setTrackerFilter("All");
     setLabelFilter("All");
     setSearchQuery("");
+    setDateFilter("all");
   }, []);
 
   return {
-    // Filters
-    stateFilter,
-    setStateFilter,
-    trackerFilter,
-    setTrackerFilter,
-    labelFilter,
-    setLabelFilter,
-    searchQuery,
-    setSearchQuery,
+    stateFilter, setStateFilter,
+    trackerFilter, setTrackerFilter,
+    labelFilter, setLabelFilter,
+    searchQuery, setSearchQuery,
+    dateFilter, setDateFilter,
     filterDict,
     hasActiveFilters,
     clearFilters,
-    // Dialogs
-    showAddDialog,
-    setShowAddDialog,
-    showSettings,
-    setShowSettings,
-    showRemoveDialog,
-    setShowRemoveDialog,
-    showNFODialog,
-    setShowNFODialog,
-    nfoHash,
-    setNfoHash,
-    showRemoveRatioDialog,
-    setShowRemoveRatioDialog,
-    showMobileSidebar,
-    setShowMobileSidebar,
+    showAddDialog, setShowAddDialog,
+    showSettings, setShowSettings,
+    showRemoveDialog, setShowRemoveDialog,
+    showNFODialog, setShowNFODialog,
+    nfoHash, setNfoHash,
+    showRemoveRatioDialog, setShowRemoveRatioDialog,
+    showMobileSidebar, setShowMobileSidebar,
   };
 }

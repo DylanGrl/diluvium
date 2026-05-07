@@ -1,13 +1,139 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TorrentStatus } from "@/api/types";
-import { cn, formatBytes, formatSpeed, formatETA, formatRatio, ratioColor, torrentStateColor, progressColor } from "@/lib/utils";
+import {
+  cn,
+  formatBytes,
+  formatSpeed,
+  formatETA,
+  formatRatio,
+  formatDate,
+  ratioColor,
+  torrentStateColor,
+  progressColor,
+  trackerHealth,
+  sortTorrentsByKey,
+} from "@/lib/utils";
 import { store } from "@/lib/store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { ArrowUp, ArrowDown, Plus, Search, FilterX, Columns3 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Search,
+  FilterX,
+  Columns3,
+  CalendarDays,
+  AlignJustify,
+} from "lucide-react";
+import type { DateFilter } from "@/hooks/use-dashboard-state";
 
-const ROW_HEIGHT_PX = 44;
+// ---------------------------------------------------------------------------
+// Column definitions
+// ---------------------------------------------------------------------------
+
+type ColAlign = "left" | "right";
+type HideBelow = "sm" | "md" | "lg" | "xl";
+
+interface ColDef {
+  key: string;
+  label: string;
+  /** undefined = flex (name col) */
+  defaultWidth?: number;
+  minWidth: number;
+  align?: ColAlign;
+  hideBelow?: HideBelow;
+  alwaysVisible?: boolean;
+}
+
+const ALL_COLUMNS: ColDef[] = [
+  { key: "name",                  label: "Name",     minWidth: 100, alwaysVisible: true },
+  { key: "size",                  label: "Size",     defaultWidth:  96, minWidth: 64, align: "right", hideBelow: "md" },
+  { key: "progress",              label: "Progress", defaultWidth: 112, minWidth: 80, alwaysVisible: true },
+  { key: "state",                 label: "Status",   defaultWidth:  96, minWidth: 72, hideBelow: "sm" },
+  { key: "download_payload_rate", label: "Down",     defaultWidth:  88, minWidth: 64, align: "right", alwaysVisible: true },
+  { key: "upload_payload_rate",   label: "Up",       defaultWidth:  88, minWidth: 64, align: "right", alwaysVisible: true },
+  { key: "eta",                   label: "ETA",      defaultWidth:  80, minWidth: 56, align: "right", hideBelow: "md" },
+  { key: "ratio",                 label: "Ratio",    defaultWidth:  64, minWidth: 48, align: "right", hideBelow: "md" },
+  { key: "num_seeds",             label: "Seeds",    defaultWidth:  80, minWidth: 56, align: "right", hideBelow: "lg" },
+  { key: "num_peers",             label: "Peers",    defaultWidth:  80, minWidth: 56, align: "right", hideBelow: "lg" },
+  { key: "time_added",            label: "Added",    defaultWidth: 144, minWidth: 100, align: "right", hideBelow: "lg" },
+];
+
+// Hardcoded full strings — Tailwind JIT requires literal class names to generate CSS
+const HEADER_VIS: Record<HideBelow, string> = {
+  sm: "hidden sm:flex",
+  md: "hidden md:flex",
+  lg: "hidden lg:flex",
+  xl: "hidden xl:flex",
+};
+
+/** Header cells are flex containers */
+function getVisibilityClass(col: ColDef): string {
+  if (col.alwaysVisible || !col.hideBelow) return "";
+  return HEADER_VIS[col.hideBelow];
+}
+
+// Data cells use block so text-right alignment works
+const CELL_VIS: Record<HideBelow, string> = {
+  sm: "hidden sm:block",
+  md: "hidden md:block",
+  lg: "hidden lg:block",
+  xl: "hidden xl:block",
+};
+
+/** Data cells are block — text-right requires block display */
+function getCellVisClass(col: ColDef): string {
+  if (col.alwaysVisible || !col.hideBelow) return "";
+  return CELL_VIS[col.hideBelow];
+}
+
+function getColStyle(col: ColDef, widths: Record<string, number>): React.CSSProperties {
+  if (col.defaultWidth === undefined) {
+    return { flex: 1, minWidth: col.minWidth };
+  }
+  return { width: widths[col.key] ?? col.defaultWidth, flexShrink: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Density
+// ---------------------------------------------------------------------------
+
+const DENSITY_CONFIG = {
+  compact:     { rowHeight: 32, py: "py-0.5" },
+  default:     { rowHeight: 44, py: "py-2"   },
+  comfortable: { rowHeight: 56, py: "py-3.5" },
+} as const;
+type Density = keyof typeof DENSITY_CONFIG;
+
+const DENSITY_CYCLE: Density[] = ["compact", "default", "comfortable"];
+const DENSITY_LABELS: Record<Density, string> = {
+  compact: "Compact",
+  default: "Default",
+  comfortable: "Comfortable",
+};
+
+// ---------------------------------------------------------------------------
+// Date filter
+// ---------------------------------------------------------------------------
+
+const DATE_FILTER_LABELS: Record<DateFilter, string> = {
+  all:   "All time",
+  today: "Today",
+  week:  "Last 7 days",
+  month: "Last 30 days",
+};
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 
 interface TorrentTableProps {
   torrents: (TorrentStatus & { hash: string })[];
@@ -18,47 +144,13 @@ interface TorrentTableProps {
   isLoading?: boolean;
   hasActiveFilters?: boolean;
   onClearFilters?: () => void;
+  dateFilter?: DateFilter;
+  onDateFilter?: (f: DateFilter) => void;
 }
 
-type SortDir = "asc" | "desc";
-
-const ALL_COLUMNS = [
-  { key: "name", label: "Name", className: "flex-[3] min-w-[100px] sm:min-w-[140px]", alwaysVisible: true },
-  { key: "size", label: "Size", className: "w-24 min-w-[5.5rem] text-right", hideBelow: "md" as const },
-  { key: "progress", label: "Progress", className: "w-20 sm:w-28", alwaysVisible: true },
-  { key: "state", label: "Status", className: "w-20 sm:w-24 min-w-[5.5rem]", hideBelow: "sm" as const },
-  { key: "download_payload_rate", label: "Down", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
-  { key: "upload_payload_rate", label: "Up", className: "w-16 sm:w-24 text-right", alwaysVisible: true },
-  { key: "eta", label: "ETA", className: "w-20 min-w-[4.5rem] text-right", hideBelow: "md" as const },
-  { key: "ratio", label: "Ratio", className: "w-16 min-w-[4.5rem] text-right", hideBelow: "md" as const },
-  { key: "num_seeds", label: "Seeds", className: "w-20 text-right", hideBelow: "lg" as const },
-  { key: "num_peers", label: "Peers", className: "w-20 text-right", hideBelow: "lg" as const },
-] as const;
-
-function getResponsiveClass(col: typeof ALL_COLUMNS[number]): string {
-  if ("alwaysVisible" in col && col.alwaysVisible) return col.className;
-  if ("hideBelow" in col) {
-    const bp = col.hideBelow;
-    return `hidden ${bp}:block ${col.className}`;
-  }
-  return col.className;
-}
-
-function getSortValue(torrent: TorrentStatus, key: string): string | number {
-  switch (key) {
-    case "name": return torrent.name.toLowerCase();
-    case "size": return torrent.total_size;
-    case "progress": return torrent.progress;
-    case "state": return torrent.state;
-    case "download_payload_rate": return torrent.download_payload_rate;
-    case "upload_payload_rate": return torrent.upload_payload_rate;
-    case "eta": return torrent.eta;
-    case "ratio": return torrent.ratio;
-    case "num_seeds": return torrent.num_seeds;
-    case "num_peers": return torrent.num_peers;
-    default: return 0;
-  }
-}
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function TorrentTable({
   torrents,
@@ -69,27 +161,29 @@ export function TorrentTable({
   isLoading,
   hasActiveFilters,
   onClearFilters,
+  dateFilter = "all",
+  onDateFilter,
 }: TorrentTableProps) {
   const [sortColumn, setSortColumn] = useState(store.getSortColumn());
-  const [sortDir, setSortDir] = useState<SortDir>(store.getSortDirection());
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(store.getSortDirection());
   const [visibleColumns, setVisibleColumns] = useState<string[]>(store.getSelectedColumns());
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [density, setDensityState] = useState<Density>(store.getDensity());
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(store.getColumnWidths());
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  const rowHeight = DENSITY_CONFIG[density].rowHeight;
+  const rowPy = DENSITY_CONFIG[density].py;
 
   const columns = useMemo(
     () => ALL_COLUMNS.filter((col) => visibleColumns.includes(col.key)),
     [visibleColumns]
   );
 
-  const sorted = useMemo(() => {
-    const copy = [...torrents];
-    copy.sort((a, b) => {
-      const va = getSortValue(a, sortColumn);
-      const vb = getSortValue(b, sortColumn);
-      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return copy;
-  }, [torrents, sortColumn, sortDir]);
+  const sorted = useMemo(
+    () => sortTorrentsByKey(torrents, sortColumn, sortDir),
+    [torrents, sortColumn, sortDir]
+  );
 
   function handleSort(key: string) {
     if (sortColumn === key) {
@@ -106,12 +200,52 @@ export function TorrentTable({
 
   const toggleColumn = useCallback((key: string) => {
     setVisibleColumns((prev) => {
-      const next = prev.includes(key)
-        ? prev.filter((k) => k !== key)
-        : [...prev, key];
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
       store.setSelectedColumns(next);
       return next;
     });
+  }, []);
+
+  function cycleDensity() {
+    setDensityState((d) => {
+      const next = DENSITY_CYCLE[(DENSITY_CYCLE.indexOf(d) + 1) % DENSITY_CYCLE.length];
+      store.setDensity(next);
+      return next;
+    });
+  }
+
+  function startColumnResize(key: string, clientX: number) {
+    const startWidth = columnWidths[key] ?? (ALL_COLUMNS.find((c) => c.key === key)?.defaultWidth ?? 96);
+    resizingRef.current = { key, startX: clientX, startWidth };
+
+    function onMove(e: MouseEvent) {
+      if (!resizingRef.current) return;
+      const { key: k, startX, startWidth: sw } = resizingRef.current;
+      const minW = ALL_COLUMNS.find((c) => c.key === k)?.minWidth ?? 40;
+      const next = Math.max(minW, sw + (e.clientX - startX));
+      setColumnWidths((prev) => ({ ...prev, [k]: next }));
+    }
+
+    function onUp() {
+      resizingRef.current = null;
+      setColumnWidths((widths) => { store.setColumnWidths(widths); return widths; });
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  // Keyboard: C → toggle column picker
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "c") { e.preventDefault(); setShowColumnPicker((v) => !v); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const allSelected = torrents.length > 0 && selectedHashes.size === torrents.length;
@@ -120,13 +254,12 @@ export function TorrentTable({
   const virtualizer = useVirtualizer({
     count: sorted.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT_PX,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Scroll to selected row when selection is driven externally (e.g. arrow key nav)
   useEffect(() => {
     if (selectedHashes.size !== 1) return;
     const hash = [...selectedHashes][0];
@@ -137,8 +270,9 @@ export function TorrentTable({
   return (
     <div className="flex flex-1 flex-col overflow-hidden min-h-0">
       {/* Header */}
-      <div className="flex shrink-0 items-center border-b bg-muted/50 px-3 text-xs font-medium text-muted-foreground">
-        <div className="w-7 shrink-0 flex items-center justify-center">
+      <div className="flex shrink-0 items-stretch border-b bg-muted/50 text-xs font-medium text-muted-foreground select-none">
+        {/* Checkbox */}
+        <div className="flex w-7 shrink-0 items-center justify-center px-1">
           <Checkbox
             checked={allSelected}
             onCheckedChange={onSelectAll}
@@ -146,76 +280,114 @@ export function TorrentTable({
             title="Select All (Ctrl+A)"
           />
         </div>
+        {/* Column headers */}
         {columns.map((col) => (
-          <button
+          <div
             key={col.key}
-            onClick={() => handleSort(col.key)}
             className={cn(
-              "flex items-center px-2 py-2 hover:text-foreground transition-colors shrink-0",
-              col.className.includes("text-right") && "justify-end",
-              getResponsiveClass(col)
+              "relative flex items-center",
+              col.align === "right" && "justify-end",
+              getVisibilityClass(col)
             )}
+            style={getColStyle(col, columnWidths)}
           >
-            <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-              <span>{col.label}</span>
+            <button
+              onClick={() => handleSort(col.key)}
+              className="flex w-full items-center gap-0.5 px-2 py-2 hover:text-foreground transition-colors whitespace-nowrap overflow-hidden"
+              style={col.align === "right" ? { justifyContent: "flex-end" } : {}}
+            >
+              <span className="truncate">{col.label}</span>
               {sortColumn === col.key && (
-                sortDir === "asc" ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />
+                sortDir === "asc"
+                  ? <ArrowUp className="h-3 w-3 shrink-0" />
+                  : <ArrowDown className="h-3 w-3 shrink-0" />
               )}
-            </span>
-          </button>
+            </button>
+            {/* Resize handle — only for fixed-width columns */}
+            {col.defaultWidth !== undefined && (
+              <div
+                className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-ring/60"
+                onMouseDown={(e) => { e.preventDefault(); startColumnResize(col.key, e.clientX); }}
+              />
+            )}
+          </div>
         ))}
-        <div className="relative ml-auto shrink-0">
+        {/* Toolbar: fixed width so Name flex-1 is same width as in data rows */}
+        <div className="w-[80px] shrink-0 flex items-center justify-end gap-0.5 px-1">
           <button
-            onClick={() => setShowColumnPicker(!showColumnPicker)}
+            onClick={cycleDensity}
             className="p-1 hover:text-foreground transition-colors"
-            title="Column visibility"
+            title={`Density: ${DENSITY_LABELS[density]}`}
           >
-            <Columns3 className="h-3.5 w-3.5" />
+            <AlignJustify className="h-3.5 w-3.5" />
           </button>
-          {showColumnPicker && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)} />
-              <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-md border bg-popover p-2 shadow-md">
-                {ALL_COLUMNS.map((col) => (
-                  <label key={col.key} className="flex items-center gap-2 py-1 text-xs cursor-pointer select-none hover:text-foreground">
-                    <Checkbox
-                      checked={visibleColumns.includes(col.key)}
-                      onCheckedChange={() => toggleColumn(col.key)}
-                      className="h-3 w-3"
-                    />
-                    {col.label}
-                  </label>
+
+          {onDateFilter && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "p-1 hover:text-foreground transition-colors",
+                  dateFilter !== "all" && "text-brand"
+                )}
+                title={`Date filter: ${DATE_FILTER_LABELS[dateFilter]}`}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(Object.keys(DATE_FILTER_LABELS) as DateFilter[]).map((key) => (
+                  <DropdownMenuItem
+                    key={key}
+                    onClick={() => onDateFilter(key)}
+                    className={cn(dateFilter === key && "font-medium text-brand")}
+                  >
+                    {DATE_FILTER_LABELS[key]}
+                  </DropdownMenuItem>
                 ))}
-              </div>
-            </>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
+
+          <div className="relative">
+            <button
+              onClick={() => setShowColumnPicker(!showColumnPicker)}
+              className="p-1 hover:text-foreground transition-colors"
+              title="Column visibility (C)"
+            >
+              <Columns3 className="h-3.5 w-3.5" />
+            </button>
+            {showColumnPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)} />
+                <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-md border bg-popover p-2 shadow-md">
+                  {ALL_COLUMNS.map((col) => (
+                    <label key={col.key} className="flex items-center gap-2 py-1 text-xs cursor-pointer select-none hover:text-foreground">
+                      <Checkbox
+                        checked={visibleColumns.includes(col.key)}
+                        onCheckedChange={() => toggleColumn(col.key)}
+                        className="h-3 w-3"
+                      />
+                      {col.label}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Rows */}
-      <div className="flex-1 min-h-0 overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/25 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/25" ref={scrollRef}>
+      <div
+        className="flex-1 min-h-0 overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/25"
+        ref={scrollRef}
+      >
         {isLoading ? (
-          <div className="space-y-0">
+          <div>
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="flex items-center border-b px-3 py-3">
                 <div className="w-7 shrink-0" />
-                <div className="flex-[3] min-w-[100px] sm:min-w-[140px] px-2">
+                <div className="flex-1 px-2">
                   <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-                </div>
-                <div className="hidden md:block w-24 px-2">
-                  <div className="h-4 w-16 animate-pulse rounded bg-muted ml-auto" />
-                </div>
-                <div className="w-20 sm:w-28 px-2">
-                  <div className="h-1.5 w-full animate-pulse rounded-full bg-muted" />
-                </div>
-                <div className="hidden sm:block w-20 sm:w-24 px-2">
-                  <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-                </div>
-                <div className="w-16 sm:w-24 px-2">
-                  <div className="h-4 w-14 animate-pulse rounded bg-muted ml-auto" />
-                </div>
-                <div className="w-16 sm:w-24 px-2">
-                  <div className="h-4 w-14 animate-pulse rounded bg-muted ml-auto" />
                 </div>
               </div>
             ))}
@@ -246,33 +418,24 @@ export function TorrentTable({
             )}
           </div>
         ) : (
-          <div
-            className="relative w-full"
-            style={{ height: `${virtualizer.getTotalSize()}px` }}
-          >
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualItems.map((virtualRow) => {
               const torrent = sorted[virtualRow.index];
               return (
                 <div
                   key={torrent.hash}
                   className="absolute left-0 w-full"
-                  style={{
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
+                  style={{ height: `${virtualRow.size}px`, transform: `translateY(${virtualRow.start}px)` }}
                 >
                   <ContextMenu
-                    content={
-                      <TorrentContextMenuContent
-                        torrent={torrent}
-                        onAction={onAction}
-                      />
-                    }
+                    content={<TorrentContextMenuContent torrent={torrent} onAction={onAction} />}
                   >
                     <TorrentRow
                       torrent={torrent}
                       selected={selectedHashes.has(torrent.hash)}
                       columns={columns}
+                      columnWidths={columnWidths}
+                      rowPy={rowPy}
                       onSelect={onSelect}
                     />
                   </ContextMenu>
@@ -285,6 +448,10 @@ export function TorrentTable({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
 
 function TorrentContextMenuContent({
   torrent,
@@ -310,35 +477,40 @@ function TorrentContextMenuContent({
       <ContextMenuItem onClick={() => onAction("copy_name")}>Copy Name</ContextMenuItem>
       <ContextMenuItem onClick={() => onAction("copy_hash")}>Copy Hash</ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => onAction("move_storage")}>Move storage…</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("set_label")}>Set Label…</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("move_storage")}>Move Storage…</ContextMenuItem>
       <ContextMenuItem onClick={() => onAction("generate_nfo")}>Generate NFO</ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem destructive onClick={() => onAction("remove")}>
-        Remove
-      </ContextMenuItem>
+      <ContextMenuItem destructive onClick={() => onAction("remove")}>Remove</ContextMenuItem>
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Row
+// ---------------------------------------------------------------------------
 
 function TorrentRow({
   torrent,
   selected,
   columns,
+  columnWidths,
+  rowPy,
   onSelect,
 }: {
   torrent: TorrentStatus & { hash: string };
   selected: boolean;
-  columns: readonly (typeof ALL_COLUMNS[number])[];
+  columns: ColDef[];
+  columnWidths: Record<string, number>;
+  rowPy: string;
   onSelect: (hash: string, multi: boolean, shift?: boolean) => void;
 }) {
   return (
     <div
       onClick={(e) => onSelect(torrent.hash, e.ctrlKey || e.metaKey, e.shiftKey)}
       className={cn(
-        "flex items-center border-b px-3 text-sm cursor-pointer transition-colors min-h-[44px]",
-        selected
-          ? "bg-accent/80 text-accent-foreground"
-          : "hover:bg-muted/50"
+        "flex items-center border-b text-sm cursor-pointer transition-colors h-full",
+        selected ? "bg-accent/80 text-accent-foreground" : "hover:bg-muted/50"
       )}
     >
       <div className="w-7 shrink-0 flex items-center justify-center">
@@ -350,23 +522,53 @@ function TorrentRow({
         />
       </div>
       {columns.map((col) => (
-        <TorrentCell key={col.key} col={col} torrent={torrent} />
+        <TorrentCell key={col.key} col={col} torrent={torrent} columnWidths={columnWidths} rowPy={rowPy} />
       ))}
+      {/* Spacer matching header toolbar width so columns stay aligned */}
+      <div className="w-[80px] shrink-0" />
     </div>
   );
 }
 
-function TorrentCell({ col, torrent }: { col: typeof ALL_COLUMNS[number]; torrent: TorrentStatus & { hash: string } }) {
-  const cls = getResponsiveClass(col);
+// ---------------------------------------------------------------------------
+// Cell
+// ---------------------------------------------------------------------------
+
+function TorrentCell({
+  col,
+  torrent,
+  columnWidths,
+  rowPy,
+}: {
+  col: ColDef;
+  torrent: TorrentStatus & { hash: string };
+  columnWidths: Record<string, number>;
+  rowPy: string;
+}) {
+  const style = getColStyle(col, columnWidths);
+  const vis = getCellVisClass(col);
+  const base = cn("overflow-hidden px-2", rowPy, vis, col.align === "right" && "text-right");
 
   switch (col.key) {
-    case "name":
-      return <div className={cn("truncate px-2 py-2", cls)}>{torrent.name}</div>;
+    case "name": {
+      const health = trackerHealth(torrent.message);
+      return (
+        <div className={cn(base, "flex items-center gap-1.5")} style={style}>
+          {health === "error" && (
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-state-error"
+              title={torrent.message}
+            />
+          )}
+          <span className="truncate text-sm">{torrent.name}</span>
+        </div>
+      );
+    }
     case "size":
-      return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{formatBytes(torrent.total_size)}</div>;
+      return <div className={cn(base, "text-xs text-muted-foreground")} style={style}>{formatBytes(torrent.total_size)}</div>;
     case "progress":
       return (
-        <div className={cn("px-2 py-2", cls)}>
+        <div className={cn(base)} style={style}>
           <div className="flex items-center gap-2">
             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
@@ -381,10 +583,14 @@ function TorrentCell({ col, torrent }: { col: typeof ALL_COLUMNS[number]; torren
         </div>
       );
     case "state":
-      return <div className={cn("px-2 py-2 text-xs font-medium", cls, torrentStateColor(torrent.state))}>{torrent.state}</div>;
+      return (
+        <div className={cn(base, "text-xs font-medium", torrentStateColor(torrent.state))} style={style}>
+          {torrent.state}
+        </div>
+      );
     case "download_payload_rate":
       return (
-        <div className={cn("px-2 py-2 text-xs", cls)}>
+        <div className={cn(base, "text-xs")} style={style}>
           {torrent.download_payload_rate > 0
             ? <span className="text-dl">{formatSpeed(torrent.download_payload_rate)}</span>
             : <span className="text-muted-foreground">—</span>}
@@ -392,20 +598,22 @@ function TorrentCell({ col, torrent }: { col: typeof ALL_COLUMNS[number]; torren
       );
     case "upload_payload_rate":
       return (
-        <div className={cn("px-2 py-2 text-xs", cls)}>
+        <div className={cn(base, "text-xs")} style={style}>
           {torrent.upload_payload_rate > 0
             ? <span className="text-ul">{formatSpeed(torrent.upload_payload_rate)}</span>
             : <span className="text-muted-foreground">—</span>}
         </div>
       );
     case "eta":
-      return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{torrent.eta > 0 ? formatETA(torrent.eta) : "—"}</div>;
+      return <div className={cn(base, "text-xs text-muted-foreground")} style={style}>{torrent.eta > 0 ? formatETA(torrent.eta) : "—"}</div>;
     case "ratio":
-      return <div className={cn("px-2 py-2 text-xs font-medium", cls, ratioColor(torrent.ratio))}>{formatRatio(torrent.ratio)}</div>;
+      return <div className={cn(base, "text-xs font-medium", ratioColor(torrent.ratio))} style={style}>{formatRatio(torrent.ratio)}</div>;
     case "num_seeds":
-      return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{torrent.num_seeds} ({torrent.total_seeds})</div>;
+      return <div className={cn(base, "text-xs text-muted-foreground")} style={style}>{torrent.num_seeds} ({torrent.total_seeds})</div>;
     case "num_peers":
-      return <div className={cn("px-2 py-2 text-xs text-muted-foreground", cls)}>{torrent.num_peers} ({torrent.total_peers})</div>;
+      return <div className={cn(base, "text-xs text-muted-foreground")} style={style}>{torrent.num_peers} ({torrent.total_peers})</div>;
+    case "time_added":
+      return <div className={cn(base, "text-xs text-muted-foreground")} style={style}>{formatDate(torrent.time_added)}</div>;
     default:
       return null;
   }

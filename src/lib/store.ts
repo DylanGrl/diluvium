@@ -66,6 +66,7 @@ export const store = {
       "ratio",
       "num_seeds",
       "num_peers",
+      "time_added",
     ]),
   setSelectedColumns: (cols: string[]) => setItem("columns", cols),
 
@@ -83,4 +84,42 @@ export const store = {
 
   getMobileSortDir: () => getItem<"asc" | "desc">("mobile_sort_dir", "asc"),
   setMobileSortDir: (dir: "asc" | "desc") => setItem("mobile_sort_dir", dir),
+
+  // Persisted filter/search state
+  getFilterState: () => getItem<{
+    stateFilter: string;
+    trackerFilter: string;
+    labelFilter: string;
+    dateFilter: string;
+    searchQuery: string;
+  }>("filter_state", {
+    stateFilter: "All",
+    trackerFilter: "All",
+    labelFilter: "All",
+    dateFilter: "all",
+    searchQuery: "",
+  }),
+  setFilterState: (s: {
+    stateFilter: string;
+    trackerFilter: string;
+    labelFilter: string;
+    dateFilter: string;
+    searchQuery: string;
+  }) => setItem("filter_state", s),
+
+  // Save-path history (most-recent-first, max 10)
+  getPathHistory: () => getItem<string[]>("path_history", []),
+  addToPathHistory: (path: string) => {
+    if (!path.trim()) return;
+    const prev = getItem<string[]>("path_history", []);
+    setItem("path_history", [path, ...prev.filter((p) => p !== path)].slice(0, 10));
+  },
+
+  // Row density for desktop table
+  getDensity: () => getItem<"compact" | "default" | "comfortable">("density", "default"),
+  setDensity: (d: "compact" | "default" | "comfortable") => setItem("density", d),
+
+  // Per-column width overrides (pixels)
+  getColumnWidths: () => getItem<Record<string, number>>("col_widths", {}),
+  setColumnWidths: (w: Record<string, number>) => setItem("col_widths", w),
 };

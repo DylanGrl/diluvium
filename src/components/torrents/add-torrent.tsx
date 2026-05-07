@@ -39,6 +39,7 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
 
   function handleSaveDefaultLocation() {
     store.setDefaultDownloadLocation(downloadLocation);
+    if (downloadLocation) store.addToPathHistory(downloadLocation);
     toast.success("Default download location saved");
   }
 
@@ -52,6 +53,7 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
           filedump: "",
           options: opts,
         });
+        if (effectivePath) store.addToPathHistory(effectivePath);
         toast.success(`Added: ${file.name}`);
         onOpenChange(false);
       }
@@ -106,6 +108,7 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
     try {
       await addMagnetMutation.mutateAsync({ uri: magnetUri.trim(), options: getOptions() });
       toast.success("Magnet link added");
+      if (effectivePath) store.addToPathHistory(effectivePath);
       setMagnetUri("");
       onOpenChange(false);
     } catch (err) {
@@ -118,6 +121,7 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
     try {
       await addUrlMutation.mutateAsync({ url: url.trim(), options: getOptions() });
       toast.success("URL torrent added");
+      if (effectivePath) store.addToPathHistory(effectivePath);
       setUrl("");
       onOpenChange(false);
     } catch (err) {
@@ -240,11 +244,17 @@ export function AddTorrentDialog({ open, onOpenChange }: AddTorrentDialogProps) 
                 <div className="flex gap-1.5">
                   <Input
                     id="dl-location"
+                    list="path-history"
                     className="h-8 text-xs"
                     placeholder={defaultPath || "/path/on/server"}
                     value={downloadLocation}
                     onChange={(e) => setDownloadLocation(e.target.value)}
                   />
+                  <datalist id="path-history">
+                    {store.getPathHistory().map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
                   <Button variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={handleSaveDefaultLocation}>
                     Save default
                   </Button>

@@ -3,7 +3,6 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { delugeClient } from "./client";
 import type { Peer, TorrentNFOData, TorrentStatus, UpdateUIResult } from "./types";
 
@@ -90,6 +89,7 @@ export function useConnection() {
     queryKey: ["connection", "connected"],
     queryFn: () => delugeClient.connected(),
     refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   const connectMutation = useMutation({
@@ -97,8 +97,8 @@ export function useConnection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connection", "connected"] });
     },
-    onError: (err) => {
-      toast.error(`Failed to connect: ${err instanceof Error ? err.message : "Unknown error"}`);
+    onError: () => {
+      // Silent — auto-reconnect runs in background; noisy toast on every 10s poll is disruptive
     },
   });
 
@@ -162,6 +162,7 @@ export function useTorrentStatus(hash: string | null) {
       ) as Promise<TorrentStatus>,
     enabled: !!hash,
     refetchInterval: 3000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -188,6 +189,7 @@ export function useTorrentPeers(hash: string | null) {
       delugeClient.getTorrentPeers(hash!) as Promise<{ peers: Peer[] }>,
     enabled: !!hash,
     refetchInterval: 3000,
+    refetchIntervalInBackground: false,
   });
 }
 

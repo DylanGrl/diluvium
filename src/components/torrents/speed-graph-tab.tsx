@@ -9,7 +9,7 @@ interface SpeedPoint {
   up: number;
 }
 
-export function SpeedGraphTab({ torrent, contentHeight }: { torrent: TorrentStatus; contentHeight: number }) {
+export function SpeedGraphTab({ torrent }: { torrent: TorrentStatus }) {
   const [history, setHistory] = useState<SpeedPoint[]>([]);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function SpeedGraphTab({ torrent, contentHeight }: { torrent: TorrentStat
   }, [torrent.download_payload_rate, torrent.upload_payload_rate]);
 
   return (
-    <div style={{ height: contentHeight }} className="px-4 py-2">
+    <div className="h-full px-4 py-2">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={history}>
           <XAxis dataKey="time" hide />

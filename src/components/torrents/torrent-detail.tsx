@@ -112,8 +112,6 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
     window.addEventListener("touchend", onTouchEnd);
   }, [panelHeight, isMobile]);
 
-  const contentHeight = panelHeight - 88; // drag handle + title bar + tabs
-
   const panelContent = (
     <>
       {/* Drag handle */}
@@ -124,7 +122,7 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
       >
         <GripHorizontal className="h-3 w-3 text-muted-foreground" />
       </div>
-      <div className="flex items-center justify-between border-b px-4 py-1.5">
+      <div className="flex shrink-0 items-center justify-between border-b px-4 py-1.5">
         <h3 className="truncate text-sm font-medium">{torrent.name}</h3>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
           <X className="h-3.5 w-3.5" />
@@ -141,26 +139,26 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
             <TabsTrigger value="options">Options</TabsTrigger>
           </TabsList>
         </div>
-        <div className="flex-1 overflow-hidden" style={{ height: contentHeight }}>
-          <TabsContent value="general">
-            <GeneralTab hash={hash} torrent={torrent} contentHeight={contentHeight} />
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <TabsContent value="general" className="flex-1 min-h-0 flex flex-col mt-0">
+            <GeneralTab hash={hash} torrent={torrent} />
           </TabsContent>
-          <TabsContent value="speed">
-            <Suspense fallback={<div className="flex items-center justify-center" style={{ height: contentHeight }}><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
-              <LazySpeedGraphTab torrent={torrent} contentHeight={contentHeight} />
+          <TabsContent value="speed" className="flex-1 min-h-0 flex flex-col mt-0">
+            <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
+              <LazySpeedGraphTab torrent={torrent} />
             </Suspense>
           </TabsContent>
-          <TabsContent value="files">
-            <FilesTab hash={hash} contentHeight={contentHeight} />
+          <TabsContent value="files" className="flex-1 min-h-0 flex flex-col mt-0">
+            <FilesTab hash={hash} />
           </TabsContent>
-          <TabsContent value="peers">
-            <PeersTab hash={hash} contentHeight={contentHeight} />
+          <TabsContent value="peers" className="flex-1 min-h-0 flex flex-col mt-0">
+            <PeersTab hash={hash} />
           </TabsContent>
-          <TabsContent value="trackers">
-            <TrackersTab hash={hash} contentHeight={contentHeight} />
+          <TabsContent value="trackers" className="flex-1 min-h-0 flex flex-col mt-0">
+            <TrackersTab hash={hash} />
           </TabsContent>
-          <TabsContent value="options">
-            <OptionsTab hash={hash} torrent={torrent} contentHeight={contentHeight} />
+          <TabsContent value="options" className="flex-1 min-h-0 flex flex-col mt-0">
+            <OptionsTab hash={hash} torrent={torrent} />
           </TabsContent>
         </div>
       </Tabs>
@@ -175,7 +173,7 @@ export function TorrentDetail({ hash, torrent, onClose, isMobile }: TorrentDetai
         {/* Bottom sheet */}
         <div
           className="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-xl bg-card animate-in slide-in-from-bottom"
-          style={{ height: panelHeight, maxHeight: "85vh" }}
+          style={{ height: panelHeight, maxHeight: "85vh", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
           {panelContent}
         </div>
@@ -248,11 +246,9 @@ function PieceMap({ hash }: { hash: string }) {
 function GeneralTab({
   hash,
   torrent,
-  contentHeight,
 }: {
   hash: string;
   torrent: TorrentStatus;
-  contentHeight: number;
 }) {
   const items = [
     ["Progress", `${torrent.progress.toFixed(1)}% (${formatBytes(torrent.total_done)} / ${formatBytes(torrent.total_size)})`],
@@ -276,7 +272,7 @@ function GeneralTab({
   }
 
   return (
-    <ScrollArea style={{ height: contentHeight }} className="px-4 py-2">
+    <ScrollArea className="h-full px-4 py-2">
       <div className="mb-3">
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
@@ -364,7 +360,7 @@ const PRIORITY_OPTIONS = [
   { value: "7", label: "Highest" },
 ];
 
-function FilesTab({ hash, contentHeight }: { hash: string; contentHeight: number }) {
+function FilesTab({ hash }: { hash: string }) {
   const { data, isLoading } = useTorrentFiles(hash);
   const { setFilePrioritiesMutation } = useTorrentActions();
 
@@ -394,7 +390,7 @@ function FilesTab({ hash, contentHeight }: { hash: string; contentHeight: number
   }
 
   return (
-    <div style={{ height: contentHeight }} className="flex flex-col">
+    <div className="h-full flex flex-col">
       <div className="flex items-center gap-2 px-4 py-1 border-b">
         <span className="text-xs text-muted-foreground">Set all:</span>
         {PRIORITY_OPTIONS.map((opt) => (
@@ -447,7 +443,7 @@ function FilesTab({ hash, contentHeight }: { hash: string; contentHeight: number
   );
 }
 
-function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number }) {
+function PeersTab({ hash }: { hash: string }) {
   const { data, isLoading } = useTorrentPeers(hash);
 
   if (isLoading) return <div className="p-4 text-xs text-muted-foreground">Loading...</div>;
@@ -455,7 +451,7 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
   const peers: Peer[] = data?.peers ?? [];
 
   return (
-    <ScrollArea style={{ height: contentHeight }}>
+    <ScrollArea className="h-full">
       <div className="overflow-x-auto">
       <table className="min-w-[360px] w-full text-xs">
         <thead>
@@ -491,7 +487,7 @@ function PeersTab({ hash, contentHeight }: { hash: string; contentHeight: number
   );
 }
 
-function TrackersTab({ hash, contentHeight }: { hash: string; contentHeight: number }) {
+function TrackersTab({ hash }: { hash: string }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useTorrentTrackers(hash);
   const [newUrl, setNewUrl] = useState("");
@@ -543,7 +539,7 @@ function TrackersTab({ hash, contentHeight }: { hash: string; contentHeight: num
   if (isLoading) return <div className="p-4 text-xs text-muted-foreground">Loading…</div>;
 
   return (
-    <div style={{ height: contentHeight }} className="flex flex-col">
+    <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-4 py-1.5 border-b shrink-0">
         <span className="text-xs text-muted-foreground">{trackers.length} tracker{trackers.length !== 1 ? "s" : ""}</span>
         <Button
@@ -628,7 +624,7 @@ function TrackersTab({ hash, contentHeight }: { hash: string; contentHeight: num
   );
 }
 
-function OptionsTab({ hash, torrent, contentHeight }: { hash: string; torrent: TorrentStatus; contentHeight: number }) {
+function OptionsTab({ hash, torrent }: { hash: string; torrent: TorrentStatus }) {
   const { setOptionsMutation } = useTorrentActions();
   const [maxDl, setMaxDl] = useState(String(torrent.max_download_speed));
   const [maxUl, setMaxUl] = useState(String(torrent.max_upload_speed));
@@ -672,7 +668,7 @@ function OptionsTab({ hash, torrent, contentHeight }: { hash: string; torrent: T
   }
 
   return (
-    <ScrollArea style={{ height: contentHeight }} className="px-4 py-2">
+    <ScrollArea className="h-full px-4 py-2">
       <div className="space-y-3 text-xs">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">

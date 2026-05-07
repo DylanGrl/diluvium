@@ -23,8 +23,17 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
           secure: false,
+          timeout: 600_000,
+          proxyTimeout: 600_000,
         },
         "/upload": {
+          target: proxyTarget,
+          changeOrigin: true,
+          secure: false,
+          timeout: 600_000,
+          proxyTimeout: 600_000,
+        },
+        "/torrent": {
           target: proxyTarget,
           changeOrigin: true,
           secure: false,

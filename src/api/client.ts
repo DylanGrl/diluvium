@@ -22,9 +22,9 @@ class DelugeClient {
     this.baseUrl = url;
   }
 
-  async call<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
+  async call<T = unknown>(method: string, params: unknown[] = [], timeoutOverride?: number): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutOverride ?? this.timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}/json`, {
@@ -50,7 +50,7 @@ class DelugeClient {
       return data.result;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        throw new Error(`Request timed out after ${this.timeoutMs / 1000}s`);
+        throw new Error(`Request timed out after ${(timeoutOverride ?? this.timeoutMs) / 1000}s`);
       }
       throw err;
     } finally {
@@ -83,11 +83,19 @@ class DelugeClient {
   }
 
   async connect(hostId: string): Promise<void> {
-    await this.call("web.connect", [hostId]);
+    await this.call("web.connect", [hostId], 10_000);
   }
 
   async connected(): Promise<boolean> {
     return this.call<boolean>("web.connected");
+  }
+
+  /** Throws immediately if not connected to daemon — avoids hanging core.* calls. */
+  async ensureConnected(): Promise<void> {
+    const isConnected = await this.call<boolean>("web.connected", [], 5_000);
+    if (!isConnected) {
+      throw new Error("Not connected to Deluge daemon. Reconnect and try again.");
+    }
   }
 
   // Torrents
@@ -134,14 +142,16 @@ class DelugeClient {
     uri: string,
     options: Record<string, unknown>,
   ): Promise<string> {
-    return this.call<string>("core.add_torrent_magnet", [uri, options]);
+    await this.ensureConnected();
+    return this.call<string>("core.add_torrent_magnet", [uri, options], 120_000);
   }
 
   async addTorrentUrl(
     url: string,
     options: Record<string, unknown>,
   ): Promise<string> {
-    return this.call<string>("core.add_torrent_url", [url, options]);
+    await this.ensureConnected();
+    return this.call<string>("core.add_torrent_url", [url, options], 120_000);
   }
 
   async addTorrentFile(
@@ -149,11 +159,12 @@ class DelugeClient {
     filedump: string,
     options: Record<string, unknown>,
   ): Promise<string> {
+    await this.ensureConnected();
     return this.call<string>("core.add_torrent_file", [
       filename,
       filedump,
       options,
-    ]);
+    ], 120_000);
   }
 
   private uploadTimeoutMs = 60_000;
@@ -251,6 +262,7 @@ class DelugeClient {
     trackers: string[][],
     addToSession: boolean,
   ): Promise<string | null> {
+    // Hashing large files can take many minutes — use 10 min timeout
     return this.call<string | null>("core.create_torrent", [
       path,
       tracker,
@@ -262,7 +274,7 @@ class DelugeClient {
       createdBy,
       trackers,
       addToSession,
-    ]);
+    ], 600_000);
   }
 
   // Config

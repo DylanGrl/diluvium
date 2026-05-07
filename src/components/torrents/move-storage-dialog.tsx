@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTorrentActions } from "@/api/hooks";
+import { store } from "@/lib/store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ export function MoveStorageDialog({ open, onOpenChange, hashes }: MoveStorageDia
     try {
       // Move each torrent — core.move_storage takes one hash at a time
       await Promise.all(hashes.map((hash) => moveMutation.mutateAsync({ hash, dest: path.trim() })));
+      store.addToPathHistory(path.trim());
       toast.success(hashes.length === 1 ? "Moving torrent…" : `Moving ${hashes.length} torrents…`);
       onOpenChange(false);
       setPath("");
@@ -48,12 +50,18 @@ export function MoveStorageDialog({ open, onOpenChange, hashes }: MoveStorageDia
             <Label htmlFor="move-dest">Destination path</Label>
             <Input
               id="move-dest"
+              list="move-path-history"
               value={path}
               onChange={(e) => setPath(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleMove()}
               placeholder="/mnt/media/downloads"
               autoFocus
             />
+            <datalist id="move-path-history">
+              {store.getPathHistory().map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

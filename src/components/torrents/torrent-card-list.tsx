@@ -9,9 +9,10 @@ import {
   ratioColor,
   torrentStateColor,
   progressColor,
+  trackerHealth,
 } from "@/lib/utils";
 import { store } from "@/lib/store";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, CalendarDays } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,7 +20,21 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuLabel,
+} from "@/components/ui/context-menu";
 import { MoreVertical, Plus, Search, FilterX } from "lucide-react";
+import type { DateFilter } from "@/hooks/use-dashboard-state";
+
+const DATE_FILTER_LABELS: Record<DateFilter, string> = {
+  all: "All time",
+  today: "Today",
+  week: "Last 7 days",
+  month: "Last 30 days",
+};
 
 const CARD_HEIGHT_PX = 88;
 
@@ -52,6 +67,8 @@ interface TorrentCardListProps {
   isLoading?: boolean;
   hasActiveFilters?: boolean;
   onClearFilters?: () => void;
+  dateFilter?: DateFilter;
+  onDateFilter?: (f: DateFilter) => void;
 }
 
 export function TorrentCardList({
@@ -62,6 +79,8 @@ export function TorrentCardList({
   isLoading,
   hasActiveFilters,
   onClearFilters,
+  dateFilter = "all",
+  onDateFilter,
 }: TorrentCardListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sortCol, setSortCol] = useState<SortKey>(() => store.getMobileSortColumn() as SortKey);
@@ -160,6 +179,30 @@ export function TorrentCardList({
           {/* Right-edge fade to hint horizontal scroll */}
           <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background" />
         </div>
+        {onDateFilter && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "flex shrink-0 items-center gap-1 border-l px-2.5 py-1.5 text-xs hover:bg-muted/50 transition-colors",
+                dateFilter !== "all" ? "text-brand" : "text-muted-foreground"
+              )}
+              title="Filter by date added"
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {(Object.keys(DATE_FILTER_LABELS) as DateFilter[]).map((key) => (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => onDateFilter(key)}
+                  className={cn(dateFilter === key && "font-medium text-brand")}
+                >
+                  {DATE_FILTER_LABELS[key]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {hasActiveFilters && (
           <button
             onClick={onClearFilters}
@@ -219,7 +262,35 @@ function TorrentCard({
   const isDownloading = torrent.state === "Downloading";
   const showETA = isDownloading && torrent.eta > 0 && isFinite(torrent.eta);
 
+  const contextMenuContent = (
+    <>
+      <ContextMenuLabel>{torrent.state}</ContextMenuLabel>
+      <ContextMenuSeparator />
+      {torrent.state === "Paused" ? (
+        <ContextMenuItem onClick={() => onAction("resume")}>Resume</ContextMenuItem>
+      ) : (
+        <ContextMenuItem onClick={() => onAction("pause")}>Pause</ContextMenuItem>
+      )}
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => onAction("recheck")}>Force Recheck</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("queue_top")}>Move to Top</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("queue_up")}>Move Up</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("queue_down")}>Move Down</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("queue_bottom")}>Move to Bottom</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => onAction("copy_name")}>Copy Name</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("copy_hash")}>Copy Hash</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => onAction("set_label")}>Set Label…</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("move_storage")}>Move Storage…</ContextMenuItem>
+      <ContextMenuItem onClick={() => onAction("generate_nfo")}>Generate NFO</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem destructive onClick={() => onAction("remove")}>Remove</ContextMenuItem>
+    </>
+  );
+
   return (
+    <ContextMenu content={contextMenuContent} enableLongPress>
     <div
       className={cn(
         "flex items-center gap-3 rounded-lg border bg-card px-3 h-[80px] cursor-pointer transition-colors",
@@ -233,7 +304,15 @@ function TorrentCard({
       {/* Main content */}
       <div className="flex flex-1 flex-col gap-1 min-w-0">
         {/* Name */}
-        <p className="truncate text-sm font-medium leading-tight">{torrent.name}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {trackerHealth(torrent.message) === "error" && (
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-state-error"
+              title={torrent.message}
+            />
+          )}
+          <p className="truncate text-sm font-medium leading-tight">{torrent.name}</p>
+        </div>
 
         {/* Progress bar + percentage */}
         <div className="flex items-center gap-2">
@@ -248,7 +327,7 @@ function TorrentCard({
           </span>
         </div>
 
-        {/* Stats row: state · speeds · ratio or ETA */}
+        {/* Stats row: state · speeds · ratio [· ETA] */}
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className={cn("shrink-0 font-medium", stateColor)}>
             {torrent.state}
@@ -256,11 +335,10 @@ function TorrentCard({
           <span className="shrink-0">·</span>
           <span className="shrink-0">↓ {formatSpeed(torrent.download_payload_rate)}</span>
           <span className="shrink-0">↑ {formatSpeed(torrent.upload_payload_rate)}</span>
-          {showETA ? (
-            <span className="ml-auto shrink-0">ETA {formatETA(torrent.eta)}</span>
-          ) : (
-            <span className={cn("ml-auto shrink-0 font-medium", ratioColor(torrent.ratio))}>R {formatRatio(torrent.ratio)}</span>
-          )}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            <span className={cn("font-medium", ratioColor(torrent.ratio))}>R {formatRatio(torrent.ratio)}</span>
+            {showETA && <><span>·</span><span>ETA {formatETA(torrent.eta)}</span></>}
+          </span>
         </div>
       </div>
 
@@ -292,6 +370,7 @@ function TorrentCard({
           <DropdownMenuItem onClick={() => onAction("copy_name")}>Copy Name</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onAction("copy_hash")}>Copy Hash</DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => onAction("set_label")}>Set Label…</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onAction("move_storage")}>Move storage…</DropdownMenuItem>
           <DropdownMenuItem onClick={() => onAction("generate_nfo")}>Generate NFO</DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -304,5 +383,6 @@ function TorrentCard({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+    </ContextMenu>
   );
 }

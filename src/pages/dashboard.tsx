@@ -13,10 +13,14 @@ import { AddTorrentDialog } from "@/components/torrents/add-torrent";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { RemoveDialog } from "@/components/torrents/remove-dialog";
 import { MoveStorageDialog } from "@/components/torrents/move-storage-dialog";
+import { SetLabelDialog } from "@/components/torrents/set-label-dialog";
 import { QuickActionRemoveRatioDialog } from "@/components/torrents/quick-action-remove-ratio-dialog";
 import { NFODialog } from "@/components/torrents/nfo-dialog";
 import { useDashboardState } from "@/hooks/use-dashboard-state";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { KeyboardShortcutsModal } from "@/components/ui/keyboard-shortcuts-modal";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { sortTorrentsByKey } from "@/lib/utils";
 import { useTorrentNotifications } from "@/hooks/use-torrent-notifications";
 import { useSessionStats } from "@/hooks/use-session-stats";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -30,6 +34,7 @@ export function DashboardPage() {
     trackerFilter, setTrackerFilter,
     labelFilter, setLabelFilter,
     searchQuery, setSearchQuery,
+    dateFilter, setDateFilter,
     filterDict,
     hasActiveFilters,
     clearFilters,
@@ -48,6 +53,8 @@ export function DashboardPage() {
   const [detailHash, setDetailHash] = useState<string | null>(null);
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showLabelDialog, setShowLabelDialog] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const lastSelectedRef = useRef<string | null>(null);
 
   const { connectedQuery, connectToFirst } = useConnection();
@@ -56,14 +63,15 @@ export function DashboardPage() {
 
   const { data: externalIP } = useExternalIP(isConnected);
 
-  // Auto-connect to first available host
+  const { data: uiData, isLoading: uiLoading } = useUpdateUI(filterDict, isConnected);
+
+  // Auto-connect only when not connected AND no fresh torrent data coming in
+  const hasFreshData = !!uiData;
   useEffect(() => {
-    if (connectedQuery.data === false) {
+    if (connectedQuery.data === false && !hasFreshData) {
       connectToFirst();
     }
-  }, [connectedQuery.data, connectToFirst]);
-
-  const { data: uiData, isLoading: uiLoading } = useUpdateUI(filterDict, isConnected);
+  }, [connectedQuery.data, connectToFirst, hasFreshData]);
   const actions = useTorrentActions();
 
   const torrents = uiData?.torrents ?? {};
@@ -71,13 +79,29 @@ export function DashboardPage() {
   const stats = uiData?.stats;
 
   const torrentList = useMemo(() => {
-    const list: (TorrentStatus & { hash: string })[] = Object.entries(torrents).map(
+    let list: (TorrentStatus & { hash: string })[] = Object.entries(torrents).map(
       ([hash, t]) => ({ ...t, hash })
     );
-    if (!searchQuery) return list;
-    const q = searchQuery.toLowerCase();
-    return list.filter((t) => t.name.toLowerCase().includes(q));
-  }, [torrents, searchQuery]);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((t) =>
+        (t.name ?? "").toLowerCase().includes(q) ||
+        (t.hash ?? "").toLowerCase().includes(q) ||
+        (t.tracker_host ?? "").toLowerCase().includes(q) ||
+        (t.label ?? "").toLowerCase().includes(q) ||
+        (t.save_path ?? "").toLowerCase().includes(q)
+      );
+    }
+    if (dateFilter !== "all") {
+      const now = Date.now() / 1000;
+      const cutoff =
+        dateFilter === "today" ? now - 86400 :
+        dateFilter === "week"  ? now - 86400 * 7 :
+                                  now - 86400 * 30;
+      list = list.filter((t) => t.time_added >= cutoff);
+    }
+    return list;
+  }, [torrents, searchQuery, dateFilter]);
 
   const selectedTorrent = detailHash ? torrents[detailHash] : null;
 
@@ -140,34 +164,34 @@ export function DashboardPage() {
         switch (action) {
           case "pause":
             await actions.pauseMutation.mutateAsync(hashes);
-            toast.success("Torrents paused");
+            toast.success("Torrents paused", { id: "action-pause" });
             break;
           case "resume":
             await actions.resumeMutation.mutateAsync(hashes);
-            toast.success("Torrents resumed");
+            toast.success("Torrents resumed", { id: "action-resume" });
             break;
           case "remove":
             setShowRemoveDialog(true);
             return;
           case "recheck":
             await actions.recheckMutation.mutateAsync(hashes);
-            toast.success("Rechecking torrents");
+            toast.success("Rechecking torrents", { id: "action-recheck" });
             break;
           case "queue_top":
             await actions.queueTopMutation.mutateAsync(hashes);
-            toast.success("Moved to top of queue");
+            toast.success("Moved to top of queue", { id: "action-queue" });
             break;
           case "queue_up":
             await actions.queueUpMutation.mutateAsync(hashes);
-            toast.success("Moved up in queue");
+            toast.success("Moved up in queue", { id: "action-queue" });
             break;
           case "queue_down":
             await actions.queueDownMutation.mutateAsync(hashes);
-            toast.success("Moved down in queue");
+            toast.success("Moved down in queue", { id: "action-queue" });
             break;
           case "queue_bottom":
             await actions.queueBottomMutation.mutateAsync(hashes);
-            toast.success("Moved to bottom of queue");
+            toast.success("Moved to bottom of queue", { id: "action-queue" });
             break;
           case "copy_name": {
             const name = torrents[hashes[0]]?.name;
@@ -189,6 +213,9 @@ export function DashboardPage() {
           }
           case "move_storage":
             setShowMoveDialog(true);
+            return;
+          case "set_label":
+            setShowLabelDialog(true);
             return;
         }
       } catch (err) {
@@ -274,14 +301,7 @@ export function DashboardPage() {
     if (torrentList.length === 0) return;
     const col = store.getSortColumn();
     const sortDir = store.getSortDirection() as "asc" | "desc";
-    const sorted = [...torrentList].sort((a, b) => {
-      const va = (a as unknown as Record<string, unknown>)[col] ?? "";
-      const vb = (b as unknown as Record<string, unknown>)[col] ?? "";
-      const cmp = typeof va === "string" && typeof vb === "string"
-        ? va.localeCompare(vb)
-        : (va as number) < (vb as number) ? -1 : (va as number) > (vb as number) ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
+    const sorted = sortTorrentsByKey(torrentList, col, sortDir);
     const hashes = sorted.map((t) => t.hash);
     const currentIdx = detailHash ? hashes.indexOf(detailHash) : -1;
     let nextIdx: number;
@@ -324,6 +344,7 @@ export function DashboardPage() {
     onMagnetPaste: () => setShowAddDialog(true),
     onNavigateUp: () => handleNavigate("up"),
     onNavigateDown: () => handleNavigate("down"),
+    onShowHelp: () => setShowHelp(true),
     hasSelection: selectedHashes.size > 0,
   });
 
@@ -416,6 +437,7 @@ export function DashboardPage() {
             onAction={handleAction}
             onDeselect={() => { setSelectedHashes(new Set()); setDetailHash(null); }}
           />
+          <ErrorBoundary label="Torrent list failed to render">
           {isMobile ? (
             <TorrentCardList
               torrents={torrentList}
@@ -425,6 +447,8 @@ export function DashboardPage() {
               isLoading={uiLoading}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
+              dateFilter={dateFilter}
+              onDateFilter={setDateFilter}
             />
           ) : (
             <TorrentTable
@@ -436,15 +460,20 @@ export function DashboardPage() {
               isLoading={uiLoading}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
+              dateFilter={dateFilter}
+              onDateFilter={setDateFilter}
             />
           )}
+          </ErrorBoundary>
           {detailHash && selectedTorrent && (
+            <ErrorBoundary label="Detail panel failed to render">
             <TorrentDetail
               hash={detailHash}
               torrent={selectedTorrent}
               onClose={() => setDetailHash(null)}
               isMobile={isMobile}
             />
+            </ErrorBoundary>
           )}
         </div>
       </div>
@@ -459,6 +488,7 @@ export function DashboardPage() {
         </div>
       )}
 
+      <KeyboardShortcutsModal open={showHelp} onClose={() => setShowHelp(false)} />
       <AddTorrentDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
       <RemoveDialog
@@ -482,6 +512,11 @@ export function DashboardPage() {
       <MoveStorageDialog
         open={showMoveDialog}
         onOpenChange={setShowMoveDialog}
+        hashes={Array.from(selectedHashes)}
+      />
+      <SetLabelDialog
+        open={showLabelDialog}
+        onOpenChange={setShowLabelDialog}
         hashes={Array.from(selectedHashes)}
       />
     </AppShell>

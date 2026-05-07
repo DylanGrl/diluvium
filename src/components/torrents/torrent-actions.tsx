@@ -10,6 +10,7 @@ import {
   ChevronsDown,
   FileText,
   FolderOpen,
+  Tag,
   X,
 } from "lucide-react";
 
@@ -44,6 +45,9 @@ export function TorrentActions({ selectedCount, onAction, onDeselect }: TorrentA
       </Button>
       <Button variant="ghost" size="sm" onClick={() => onAction("move_storage")} title="Move storage…">
         <FolderOpen className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => onAction("set_label")} title="Set label…">
+        <Tag className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
       </Button>
       <div className="mx-1 h-4 w-px bg-border shrink-0" />
       <Button variant="ghost" size="sm" onClick={() => onAction("queue_top")} title="Queue Top">

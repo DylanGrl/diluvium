@@ -82,3 +82,66 @@ export function progressColor(progress: number, state: string): string {
 export function sanitizeDownloadFilename(name: string): string {
   return name.replace(/[/\\:*?"<>|]/g, "_");
 }
+
+/** Tracker health derived from torrent message field. Returns null when OK. */
+export function trackerHealth(message: string): "error" | null {
+  if (!message) return null;
+  const m = message.toLowerCase();
+  if (
+    m.includes("error") ||
+    m.includes("could not") ||
+    m.includes("refused") ||
+    m.includes("unreachable") ||
+    m.includes("timeout") ||
+    m.includes("invalid") ||
+    m.includes("not found") ||
+    m.includes("failed")
+  ) return "error";
+  return null;
+}
+
+/** Minimal torrent shape needed for sorting — avoids importing full TorrentStatus. */
+interface SortableTorrent {
+  name: string;
+  total_size: number;
+  progress: number;
+  state: string;
+  download_payload_rate: number;
+  upload_payload_rate: number;
+  eta: number;
+  ratio: number;
+  num_seeds: number;
+  num_peers: number;
+  time_added: number;
+}
+
+/** Sort value extractor shared between table and dashboard navigation. */
+export function getTorrentSortValue(torrent: SortableTorrent, key: string): string | number {
+  switch (key) {
+    case "name": return torrent.name.toLowerCase();
+    case "size": return torrent.total_size;
+    case "progress": return torrent.progress;
+    case "state": return torrent.state;
+    case "download_payload_rate": return torrent.download_payload_rate;
+    case "upload_payload_rate": return torrent.upload_payload_rate;
+    case "eta": return torrent.eta;
+    case "ratio": return torrent.ratio;
+    case "num_seeds": return torrent.num_seeds;
+    case "num_peers": return torrent.num_peers;
+    case "time_added": return torrent.time_added;
+    default: return 0;
+  }
+}
+
+export function sortTorrentsByKey<T extends SortableTorrent>(
+  list: T[],
+  col: string,
+  dir: "asc" | "desc"
+): T[] {
+  return [...list].sort((a, b) => {
+    const va = getTorrentSortValue(a, col);
+    const vb = getTorrentSortValue(b, col);
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return dir === "asc" ? cmp : -cmp;
+  });
+}

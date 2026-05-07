@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectOption } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Copy, Download, FileText, HardDrive } from "lucide-react";
+import { Copy, Download, FileText, HardDrive, ArrowLeftRight } from "lucide-react";
 import { generateNFO, TEMPLATES, type NFOData, type TemplateId } from "@/lib/nfo-templates";
 import { sanitizeDownloadFilename } from "@/lib/utils";
+import { decode, encode, str, toStr, type BValue } from "@/lib/bencode";
 
 interface NFODialogProps {
   open: boolean;
@@ -63,15 +64,22 @@ export function NFODialog({ open, onOpenChange, hash, torrent }: NFODialogProps)
           <TabsList className="w-full">
             <TabsTrigger value="nfo" className="flex-1">
               <FileText className="mr-1.5 h-3.5 w-3.5" />
-              Generate NFO
+              NFO
+            </TabsTrigger>
+            <TabsTrigger value="xseed" className="flex-1">
+              <ArrowLeftRight className="mr-1.5 h-3.5 w-3.5" />
+              Cross-seed
             </TabsTrigger>
             <TabsTrigger value="create" className="flex-1">
               <HardDrive className="mr-1.5 h-3.5 w-3.5" />
-              Create Torrent
+              Create
             </TabsTrigger>
           </TabsList>
           <TabsContent value="nfo" className="flex-1 min-h-0">
             <NFOTab hash={hash} torrent={torrent} />
+          </TabsContent>
+          <TabsContent value="xseed" className="flex-1 min-h-0">
+            <CrossSeedTab torrent={torrent} />
           </TabsContent>
           <TabsContent value="create" className="flex-1 min-h-0">
             <CreateTorrentTab torrent={torrent} />
@@ -204,6 +212,120 @@ function NFOTab({ hash, torrent }: { hash: string; torrent: TorrentStatus }) {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function CrossSeedTab({ torrent }: { torrent: TorrentStatus }) {
+  const [rawData, setRawData] = useState<Uint8Array | null>(null);
+  const [currentAnnounce, setCurrentAnnounce] = useState("");
+  const [isPrivate, setIsPrivate] = useState<boolean | null>(null);
+  const [newTracker, setNewTracker] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!torrent.hash) return;
+    setLoading(true);
+    setFetchError(null);
+    fetch(`/torrent/${torrent.hash}.torrent`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} — volume not mounted yet?`);
+        return r.arrayBuffer();
+      })
+      .then((buf) => {
+        const data = new Uint8Array(buf);
+        setRawData(data);
+        const parsed = decode(data) as { [key: string]: BValue };
+        setCurrentAnnounce(toStr(parsed["announce"] ?? new Uint8Array()));
+        const info = parsed["info"] as { [key: string]: BValue } | undefined;
+        setIsPrivate(typeof info?.["private"] === "number" ? info["private"] === 1 : false);
+      })
+      .catch((err: unknown) => setFetchError(err instanceof Error ? err.message : "Unknown error"))
+      .finally(() => setLoading(false));
+  }, [torrent.hash]);
+
+  function handleDownload() {
+    if (!rawData || !newTracker.trim()) return;
+    const parsed = decode(rawData) as { [key: string]: BValue };
+    parsed["announce"] = str(newTracker.trim());
+    if (parsed["announce-list"]) {
+      parsed["announce-list"] = [[str(newTracker.trim())]];
+    }
+    const encoded = encode(parsed);
+    const blob = new Blob([encoded.buffer as ArrayBuffer], { type: "application/x-bittorrent" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sanitizeDownloadFilename(torrent.name)}.torrent`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Torrent exported — same infohash, new tracker");
+  }
+
+  if (loading) {
+    return <p className="mt-4 text-sm text-muted-foreground">Loading torrent file…</p>;
+  }
+
+  if (fetchError) {
+    return (
+      <div className="mt-4 space-y-2">
+        <p className="text-sm text-destructive">{fetchError}</p>
+        <p className="text-xs text-muted-foreground">
+          The diluvium container needs the Deluge config volume mounted. Run:
+        </p>
+        <pre className="rounded bg-muted px-3 py-2 text-xs break-all whitespace-pre-wrap">
+          {`kubectl patch deployment deluge -n media --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/1/volumeMounts","value":[{"mountPath":"/deluge-config","name":"deluge-config","readOnly":true}]}]'`}
+        </pre>
+        <p className="text-xs text-muted-foreground">Then rebuild and redeploy the Docker image.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="rounded-md border bg-muted/50 p-3 text-xs space-y-1.5">
+        <div>
+          <span className="font-medium">Current tracker: </span>
+          <span className="break-all text-muted-foreground">{currentAnnounce || "—"}</span>
+        </div>
+        <div>
+          <span className="font-medium">Private: </span>
+          <span className="text-muted-foreground">{isPrivate === null ? "—" : isPrivate ? "yes" : "no"}</span>
+        </div>
+      </div>
+
+      {isPrivate === false && (
+        <p className="text-xs text-amber-500">
+          This torrent is not private. Many private trackers require the private flag to be set — changing it would alter the infohash.
+        </p>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="xseed-tracker">New Tracker Announce URL</Label>
+        <Input
+          id="xseed-tracker"
+          placeholder="https://tracker.example.com/announce/passkey"
+          value={newTracker}
+          onChange={(e) => setNewTracker(e.target.value)}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Tracker URLs are outside the info dictionary — the infohash stays identical.
+        Deluge keeps seeding while you upload to the new site.
+      </p>
+
+      <Button
+        onClick={handleDownload}
+        disabled={!newTracker.trim() || !rawData}
+        className="w-full"
+      >
+        <Download className="mr-1.5 h-3.5 w-3.5" />
+        Download .torrent with new tracker
+      </Button>
     </div>
   );
 }
@@ -374,8 +496,13 @@ function CreateTorrentTab({ torrent }: { torrent: TorrentStatus }) {
         disabled={createMutation.isPending || !sourcePath.trim() || !trackerUrl.trim()}
         className="w-full"
       >
-        {createMutation.isPending ? "Creating..." : "Create Torrent"}
+        {createMutation.isPending ? "Hashing pieces… this may take several minutes" : "Create Torrent"}
       </Button>
+      {createMutation.isPending && (
+        <p className="text-center text-xs text-muted-foreground">
+          Deluge is hashing the content on the server. Do not close this dialog.
+        </p>
+      )}
 
       {resultPath && (
         <div className="rounded-md border bg-muted/50 p-3 text-xs">
